@@ -1,0 +1,75 @@
+# use a fixed random seed to guarantee that when you run the code twice you will get the same outcome
+manual_seed: 0
+experiment_dir: 'Y:\work\results'
+tb_dir: 'Y:\work\runs'
+
+# model configuration
+model:
+  # model class, supported values: PadUNet, SegNet, UNet3D, BN_UNet3D, BN_UNet3D_9S, BN_UNet3D_17S
+  name: UNet3D
+
+# trainer configuration
+trainer:
+  # path to the checkpoint directory
+  checkpoint_path: null
+  # skip train or do train?
+  do_train: true
+  # how many iterations between validations
+  validate_after_iters: 2
+  # max number of epochs
+  epochs: 100
+
+# optimizer configuration
+optimizer:
+  # type of optimizer. if None, Adam is used by default. possible values: SGD, Adam, None
+  name: Adam
+  # initial learning rate
+  learning_rate: 0.0005
+  # weight decay
+  weight_decay: 0
+
+# loss function configuration
+loss:
+  # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss
+  name:
+    - BCEWithLogitsLoss
+    - DiceLoss
+
+lr_scheduler:
+  # MultiStepLR, null, ...
+  name: null
+  # factor by which learning rate will be reduced
+  factor: 0.1
+  milestones:
+    - 35
+    - 90
+
+data-loader:
+  # data loaders configuration
+  batch_size: 1
+  num_workers: 8
+  file_paths: 'Y:\work\datasets\maxillo\ANNOTATED3D\volumes'
+
+  # how many samples we have create from each sample in the original dataset?
+  augment_rate: 1
+  # percentage before the warmup reach 1
+  warm_up_length: 0.35
+
+  # cut so that maxpool does not generate wrong skip features
+  do_smart_cut: true
+  smart_divisor: 8
+  # scale the volume in percentage. factor value [0 - 1]
+  do_rescale: false
+  scale_factor: 1
+
+  # average center of the volumes
+  cut_index: 0.514
+
+  labels:
+    UNLABELED: 3
+    BACKGROUND: 2
+    INSIDE: 1
+    CONTOUR: 0
+#  labels:
+#    BACKGROUND: 1
+#    INSIDE: 0
