@@ -26,7 +26,7 @@ optimizer:
   # initial learning rate
   learning_rate: 0.0005
   # weight decay
-  weight_decay: 5
+  weight_decay: 0
 
 # loss function configuration
 loss:
@@ -34,15 +34,15 @@ loss:
   name:
     #- BCEWithLogitsLoss
     - BCELoss
+    # - DiceLoss
 
 lr_scheduler:
   # MultiStepLR, null, ...
-  name: null
+  name: MultiStepLR
   # factor by which learning rate will be reduced
-  factor: 0.1
+  factor: 0.2
   milestones:
-    - 35
-    - 90
+    - 5
 
 data-loader:
   # data loaders configuration

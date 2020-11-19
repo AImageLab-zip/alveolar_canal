@@ -15,7 +15,7 @@ def crop_spatial_dims(input, ref):
     """
     Crops the spatial dimensions of the input tensor to stick to the spatial dimensions
     of the reference tensor. The input is cropped in order to extract the center part.
-    Both arguments must have the spatial dimensions as the last 3 axes (3D data),
+    Both arguments must have the spatial dimensions as the last 3 axes (3D data) with same value,
     and the dimensionality must be even.
 
     Args:
