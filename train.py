@@ -3,18 +3,22 @@ import torch
 import logging
 from tqdm import tqdm
 
+from utils import crop_spatial_dims
+
 
 def train(model, train_loader, loss_fn, optimizer, device, epoch, writer, evaluator, warmup):
-
     model.train()
     loss_list = []
     evaluator.reset_eval()
 
-    for i, (images, labels, weights) in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
+    for i, (images, labels, weights) in tqdm(enumerate(train_loader), total=len(train_loader),
+                                             desc='train epoch {}'.format(str(epoch))):
 
         images, labels = images.to(device), labels.to(device)
         optimizer.zero_grad()
         outputs = model(images)
+
+        labels = crop_spatial_dims(labels, outputs)
 
         cur_loss = loss_fn(outputs, labels, warmup, weights)
         if np.isnan(cur_loss.item()):

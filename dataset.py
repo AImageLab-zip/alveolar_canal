@@ -126,7 +126,7 @@ class AlveolarDataloader(Dataset):
 
         return vol, gt, weights
 
-    def split_dataset(self, test_patient_idx=None):
+    def split_dataset(self, test_patient_idx=None, augmentation=True):
 
         num_patient = len(self.patients['data'])
         if num_patient < 2:
@@ -139,12 +139,50 @@ class AlveolarDataloader(Dataset):
             'train': np.asarray([i for i in range(num_patient) if i != test_id])
         }
 
-        tot_new = self.augment_dataset()
-        augmented_idx = np.arange(num_patient, num_patient + tot_new)
-        self.indices['train'] = np.concatenate((self.indices['train'], augmented_idx))
+        if augmentation:
+            tot_new = self.augment_dataset()
+            augmented_idx = np.arange(num_patient, num_patient + tot_new)
+            self.indices['train'] = np.concatenate((self.indices['train'], augmented_idx))
 
         np.random.seed(40)
         np.random.shuffle(self.indices['train'])
 
         return self.indices['train'], self.indices['test']
 
+
+class KwakDataloader(AlveolarDataloader):
+    def __init__(self, config):
+
+        self.config = config
+        self.patients = {
+            'data': [],
+            'gt': []
+        }
+        self.size = 132
+        self.seed = GLOBAL_RANDOM_STATE.randint(10000000)
+        self.random_state = np.random.RandomState(self.seed)
+        self.indices = {}
+
+        for folder in os.listdir(config['file_paths']):
+            data = np.load(os.path.join(config['file_paths'], folder, 'data.npy'))
+            gt = np.load(os.path.join(config['file_paths'], folder, 'gt_volume.npy'))
+
+            # pre-processing on the channels
+            if data.ndim == 4:  # (B, H, W, 3) becomes  (B, H, W)
+                data = np.take(data, 0, axis=-1)
+            if gt.ndim == 4:  # (B, H, W, 3) becomes  (B, H, W,)
+                gt = np.take(gt, 0, axis=-1)
+
+            Z, Y, X = tuple(map(lambda k: k - self.size - 1, data.shape))
+            for _ in range(64):
+                z, y, x = tuple(map(lambda k: self.random_state.randint(0, k), (Z, Y, X)))
+                cube = data[
+                       z:z + self.size,
+                       y:y + self.size,
+                       x:x + self.size]
+                gcube = gt[
+                        z:z + self.size,
+                        y:y + self.size,
+                        x:x + self.size]
+                self.patients['data'].append(cube)
+                self.patients['gt'].append(gcube)

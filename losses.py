@@ -49,6 +49,18 @@ class LossFn:
             gt = torch.squeeze(gt_onehot).reshape(B, Z, H, W, C)  # reshaping to the original shape
             pred = pred.permute(0, 2, 3, 4, 1)  # for BCE we want classes in the last axis
             loss_fn = nn.BCEWithLogitsLoss(pos_weight=weights).to(self.device)
+        elif name == 'BCELoss':
+            # one hot encoding for cross entropy with digits. Bx1xHxW -> BxCxHxW
+            B, C, Z, H, W = pred.shape
+            gt_flat = gt.reshape(-1).unsqueeze(dim=1)  # 1xB*Z*H*W
+
+            gt_onehot = torch.zeros(size=(B * Z * H * W, C), dtype=torch.float).to(
+                self.device)  # 1xB*Z*H*W destination tensor
+            gt_onehot.scatter_(1, gt_flat, 1)  # writing the conversion in the destination tensor
+
+            gt = torch.squeeze(gt_onehot).reshape(B, Z, H, W, C)  # reshaping to the original shape
+            pred = pred.permute(0, 2, 3, 4, 1)  # for BCE we want classes in the last axis
+            loss_fn = nn.BCELoss(weight=weights).to(self.device)
         elif name == 'DiceLoss':
             pred = torch.argmax(torch.nn.Softmax(dim=1)(pred), dim=1)
             pred = pred.data.cpu().numpy()

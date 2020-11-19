@@ -9,16 +9,42 @@ import cv2
 import yaml
 import torch.nn as nn
 import torch
+
+
+def crop_spatial_dims(input, ref):
+    """
+    Crops the spatial dimensions of the input tensor to stick to the spatial dimensions
+    of the reference tensor. The input is cropped in order to extract the center part.
+    Both arguments must have the spatial dimensions as the last 3 axes (3D data),
+    and the dimensionality must be even.
+
+    Args:
+        input (torch.Tensor): tensor to crop on spatial dimensions
+        ref (torch.Tensor): tensor reference for dimensions.
+    Returns:
+        (torch.Tensor): tensor with as many dimensions as the input,
+            but with reduced spatial dimensions, as ref spatial dimensions.
+    """
+    if input.shape[-3:] != ref.shape[-3:]:
+        assert (input.shape[-1] % 2 == 0 and ref.shape[-1] % 2 == 0)
+        start = (input.shape[-1] - ref.shape[-1]) // 2
+        end = input.shape[-1] - start
+        return input[..., start:end, start:end, start:end]
+    return input
+
+
+# Since this functions is imported in KwakUNet3D,
+# it must be defined before its import in this module
+from models.KwakUNet3D import KwakUNet3D
 from models.PadUNet3D import padUNet3D
 
 
 def npy_maker(path):
-
     idxs = [
-            int(re.search('(\d{1,5})_mask.png', filename).group(1))
-            for filename in listdir(join(path, 'mask'))
-            if isfile(join(path, 'mask', filename))
-        ]
+        int(re.search('(\d{1,5})_mask.png', filename).group(1))
+        for filename in listdir(join(path, 'mask'))
+        if isfile(join(path, 'mask', filename))
+    ]
     idxs.sort()
     np.save(
         join(path, 'gt.npy'),
@@ -58,6 +84,8 @@ def load_config_yaml(config_file):
 def load_model(model_config, num_classes):
     if model_config['name'] == 'UNet3D':
         return padUNet3D(n_classes=num_classes)
+    if model_config['name'] == 'KwakUNet3D':
+        return KwakUNet3D(n_classes=num_classes)
     else:
         raise Exception("Model not found, check the config.yaml")
 

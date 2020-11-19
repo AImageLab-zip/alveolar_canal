@@ -3,18 +3,21 @@ import logging
 import numpy as np
 from tqdm import tqdm
 
+from utils import crop_spatial_dims
+
 
 def test(model, test_loader, loss_fn, device, epoch, writer, evaluator, warmup, dumper=None):
-
     model.eval()
     with torch.no_grad():
         loss_list = []
         evaluator.reset_eval()
-        for i, (images, labels, weights) in tqdm(enumerate(test_loader), total=len(test_loader), desc='val epoch {}'.format(str(epoch))):
+        for i, (images, labels, weights) in tqdm(enumerate(test_loader), total=len(test_loader),
+                                                 desc='val epoch {}'.format(str(epoch))):
 
             images, labels = images.to(device), labels.to(device)
 
             outputs = model(images)
+            labels = crop_spatial_dims(labels, outputs)
 
             cur_loss = loss_fn(outputs, labels, warmup, weights)
             loss_list.append(cur_loss.item())
