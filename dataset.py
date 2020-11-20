@@ -104,8 +104,7 @@ class AlveolarDataloader(Dataset):
 
         return augment_rate * len(self.indices['train'])
 
-    def __getitem__(self, index):
-
+    def _prepare_data(self, index):
         vol, gt = self.patients['data'][index], self.patients['gt'][index]
 
         vol, gt = ToTensor()([vol, gt])
@@ -114,8 +113,9 @@ class AlveolarDataloader(Dataset):
             vol, gt = Rescale(self.config.get('scale_factor', 0.5), self.config.get('labels'))([vol, gt])
 
         vol, gt = Normalize()([vol, gt])
+        return vol, gt
 
-        # WEIGHTS COMPUTATION
+    def __compute_class_weight(self, gt):
         weights = torch.zeros(len(self.config['labels']), dtype=torch.float32)  # init vector
         for label in self.config['labels']:
             weights[self.config['labels'][label]] = (gt.numel() / (gt == self.config['labels'][label]).sum())
@@ -123,7 +123,11 @@ class AlveolarDataloader(Dataset):
         if 'UNLABELED' in self.config['labels']:  # set unlabelled weight to 0 if not binary task
             weights[self.config['labels']['UNLABELED']] = 0
         weights = weights / weights.sum()  # normalising
+        return weights
 
+    def __getitem__(self, index):
+        vol, gt = self._prepare_data(index)
+        weights = self.__compute_class_weight(gt)
         return vol, gt, weights
 
     def split_dataset(self, test_patient_idx=None, augmentation=True):
@@ -186,3 +190,47 @@ class KwakDataloader(AlveolarDataloader):
                         x:x + self.size]
                 self.patients['data'].append(cube)
                 self.patients['gt'].append(gcube)
+
+        self.weights = self.median_frequency_balancing()
+
+    def class_freq(self):
+        """
+        Computes class frequencies for each label.
+
+        Returns the number of pixels of class c (in all images) divided by the total number of pixels (in images where c is present).
+
+        Returns:
+            (torch.Tensor): tensor with shape n_labels, with class frequencies for each label.
+        """
+        num_labels = len(self.config['labels'])
+        class_pixel_count = torch.zeros(num_labels)
+        total_pixel_count = torch.zeros(num_labels)
+
+        for gt in self.patients['gt']:
+            gt_ = torch.from_numpy(gt)
+            counts = torch.bincount(gt_.flatten())
+            class_pixel_count += counts
+            n_pixels = gt_.numel()
+            total_pixel_count = torch.where(counts > 0, total_pixel_count + n_pixels, total_pixel_count)
+
+        return class_pixel_count / total_pixel_count
+
+    def median_frequency_balancing(self):
+        """
+        Computes class weights using Median Frequency Balancing.
+
+        Source paper: https://arxiv.org/pdf/1411.4734.pdf (par. 6.3.2)
+
+        Returns:
+            (torch.Tensor): class weights
+        """
+        freq = self.class_freq()
+        sorted, _ = torch.sort(freq)
+        median = torch.median(freq)
+        weights = median / sorted
+        weights /= weights.sum()  # normalizing
+        return weights
+
+    def __getitem__(self, index):
+        vol, gt = self._prepare_data(index)
+        return vol, gt, self.weights
