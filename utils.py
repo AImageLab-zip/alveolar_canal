@@ -14,9 +14,12 @@ import torch
 def crop_spatial_dims(input, ref):
     """
     Crops the spatial dimensions of the input tensor to stick to the spatial dimensions
-    of the reference tensor. The input is cropped in order to extract the center part.
+    of the reference tensor.
+
+    The input is cropped in order to extract the center part.
     Both arguments must have the spatial dimensions as the last 3 axes (3D data) with same value,
-    and the dimensionality must be even.
+    and the dimensionality must be even. If the input and ref have the same spatial extent,
+    then no operation will be executed and the input is returned as it is.
 
     Args:
         input (torch.Tensor): tensor to crop on spatial dimensions

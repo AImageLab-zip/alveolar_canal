@@ -31,7 +31,7 @@ class KwakUNet3D(nn.Module):
         self.dc3 = nn.ConvTranspose3d(128, 128, kernel_size=2, stride=2)
         self.dc2 = self.conv3Dblock(64 + 128, 64, kernel_size=3, stride=1, padding=0)
         self.dc1 = self.conv3Dblock(64, 64, kernel_size=3, stride=1, padding=0)
-        self.final = self.conv3Dblock(64, n_classes, kernel_size=3, padding=1, stride=1)
+        self.final = self.conv3Dblock(64, n_classes, kernel_size=1, padding=0, stride=1)
         self.softmax = nn.Softmax(dim=1)
 
     def conv3Dblock(self, in_channels, out_channels, kernel_size=(3, 3, 3), stride=1, padding=(0, 0, 0)):
