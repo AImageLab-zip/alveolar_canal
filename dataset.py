@@ -166,6 +166,7 @@ class KwakDataloader(AlveolarDataloader):
         self.seed = GLOBAL_RANDOM_STATE.randint(10000000)
         self.random_state = np.random.RandomState(self.seed)
         self.indices = {}
+        self.num_samples = 64
 
         for folder in os.listdir(config['file_paths']):
             data = np.load(os.path.join(config['file_paths'], folder, 'data.npy'))
@@ -178,7 +179,7 @@ class KwakDataloader(AlveolarDataloader):
                 gt = np.take(gt, 0, axis=-1)
 
             Z, Y, X = tuple(map(lambda k: k - self.size - 1, data.shape))
-            for _ in range(64):
+            for _ in range(self.num_samples):
                 z, y, x = tuple(map(lambda k: self.random_state.randint(0, k), (Z, Y, X)))
                 cube = data[
                        z:z + self.size,

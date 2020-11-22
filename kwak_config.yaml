@@ -1,7 +1,7 @@
 # use a fixed random seed to guarantee that when you run the code twice you will get the same outcome
 manual_seed: 0
-experiment_dir: '/homes/cmercadante/alverolar_canal_3Dtraining/results'
-tb_dir: '/homes/cmercadante/alverolar_canal_3Dtraining/runs'
+experiment_dir: '/nas/softechict-nas-2/cmercadante/results'
+tb_dir: '/nas/softechict-nas-2/cmercadante/runs'
 
 # model configuration
 model:
