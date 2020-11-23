@@ -32,7 +32,7 @@ class KwakUNet3D(nn.Module):
         self.dc2 = self.conv3Dblock(64 + 128, 64, kernel_size=3, stride=1, padding=0)
         self.dc1 = self.conv3Dblock(64, 64, kernel_size=3, stride=1, padding=0)
         self.final = self.conv3Dblock(64, n_classes, kernel_size=1, padding=0, stride=1)
-        self.softmax = nn.Softmax(dim=1)
+        # self.softmax = nn.Softmax(dim=1)
 
     def conv3Dblock(self, in_channels, out_channels, kernel_size=(3, 3, 3), stride=1, padding=(0, 0, 0)):
         return nn.Sequential(
@@ -82,5 +82,5 @@ class KwakUNet3D(nn.Module):
         h = self.dc1(h)
 
         h = self.final(h)
-        h = self.softmax(h)
+        #h = self.softmax(h)
         return h

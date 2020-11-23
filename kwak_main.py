@@ -18,7 +18,7 @@ from shutil import copyfile
 import numpy as np
 
 arg_parser = argparse.ArgumentParser()
-arg_parser.add_argument('--experiment_name', default="exp1", help="name of the experiment")
+arg_parser.add_argument('--experiment_name', default="kwak_unet3d", help="name of the experiment")
 arg_parser.add_argument('--yaml_path', default="kwak_config.yaml", help='path to the yaml config file')
 arg_parser.add_argument('--verbose', action='store_true', help="if true sdout is not redirected")
 arg_parser.add_argument('--save_on_disk', action='store_true', help="if true sdout is not redirected")
@@ -102,7 +102,7 @@ def main():
     )
     test_loader = data.DataLoader(
         alveolar_data,
-        batch_size=loader_config['batch_size'],
+        batch_size=1,
         sampler=SubsetRandomSampler(test_id),
         num_workers=loader_config['num_workers'],
         pin_memory=True,
@@ -139,13 +139,13 @@ def main():
                 val_metric = test(model, test_loader, loss, device, epoch, writer, evaluator, warm_up[epoch])
                 if val_metric > best_metric:
                     best_metric = val_metric
-                state = {
-                    'epoch': epoch,
-                    'state_dict': model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'metric': best_metric
-                }
-                torch.save(state, os.path.join(project_dir, 'best.pth'))
+                    state = {
+                        'epoch': epoch,
+                        'state_dict': model.state_dict(),
+                        'optimizer': optimizer.state_dict(),
+                        'metric': best_metric
+                    }
+                    torch.save(state, os.path.join(project_dir, 'best.pth'))
 
             if epoch % 10 == 0:
                 state = {

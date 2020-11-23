@@ -32,8 +32,8 @@ optimizer:
 loss:
   # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss
   name:
-    #- BCEWithLogitsLoss
-    - BCELoss
+    - BCEWithLogitsLoss
+    # - BCELoss
     # - DiceLoss
 
 lr_scheduler:
@@ -46,7 +46,7 @@ lr_scheduler:
 
 data-loader:
   # data loaders configuration
-  batch_size: 1
+  batch_size: 4
   num_workers: 8
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/MONOVOLUMES'
 

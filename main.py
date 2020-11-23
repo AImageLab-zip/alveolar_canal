@@ -140,13 +140,13 @@ def main():
                 val_metric = test(model, test_loader, loss, device, epoch, writer, evaluator, warm_up[epoch])
                 if val_metric > best_metric:
                     best_metric = val_metric
-                state = {
-                    'epoch': epoch,
-                    'state_dict': model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'metric': best_metric
-                }
-                torch.save(state, os.path.join(project_dir, 'best.pth'))
+                    state = {
+                        'epoch': epoch,
+                        'state_dict': model.state_dict(),
+                        'optimizer': optimizer.state_dict(),
+                        'metric': best_metric
+                    }
+                    torch.save(state, os.path.join(project_dir, 'best.pth'))
 
             if epoch % 10 == 0:
                 state = {

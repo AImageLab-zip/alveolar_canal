@@ -15,6 +15,7 @@ def test(model, test_loader, loss_fn, device, epoch, writer, evaluator, warmup, 
                                                  desc='val epoch {}'.format(str(epoch))):
 
             images, labels = images.to(device), labels.to(device)
+            weights = weights[0]
 
             outputs = model(images)
 

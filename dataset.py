@@ -171,7 +171,7 @@ class KwakDataloader(AlveolarDataloader):
         for folder in os.listdir(config['file_paths']):
             data = np.load(os.path.join(config['file_paths'], folder, 'data.npy'))
             gt = np.load(os.path.join(config['file_paths'], folder, 'gt_volume.npy'))
-
+            
             # pre-processing on the channels
             if data.ndim == 4:  # (B, H, W, 3) becomes  (B, H, W)
                 data = np.take(data, 0, axis=-1)

@@ -15,6 +15,8 @@ def train(model, train_loader, loss_fn, optimizer, device, epoch, writer, evalua
                                              desc='train epoch {}'.format(str(epoch))):
 
         images, labels = images.to(device), labels.to(device)
+        weights = weights[0]
+        
         optimizer.zero_grad()
         outputs = model(images)
 

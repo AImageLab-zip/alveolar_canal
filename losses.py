@@ -60,7 +60,7 @@ class LossFn:
 
             gt = torch.squeeze(gt_onehot).reshape(B, Z, H, W, C)  # reshaping to the original shape
             pred = pred.permute(0, 2, 3, 4, 1)  # for BCE we want classes in the last axis
-            loss_fn = nn.BCELoss(weight=weights).to(self.device)
+            loss_fn = nn.BCELoss().to(self.device)
         elif name == 'DiceLoss':
             pred = torch.argmax(torch.nn.Softmax(dim=1)(pred), dim=1)
             pred = pred.data.cpu().numpy()
