@@ -60,7 +60,13 @@ def main():
     model = utils.load_model(
         config.get('model'),
         num_classes=len(loader_config['labels']),
-    ).to(device)
+    )
+
+    if torch.cuda.device_count() > 1:
+        print("Let's use", torch.cuda.device_count(), "GPUs!")
+        model = nn.DataParallel(model)
+    
+    model.to(device)
 
     train_params = model.parameters()
 
