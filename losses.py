@@ -21,6 +21,23 @@ class DiceLoss(nn.Module):
         return sum(c_score) / len(labels)
 
 
+class WeightedBinaryCrossEntropy(nn.Module):
+    # this class is a test: NOT working
+    def __init__(self, class_weights):
+        super().__init__()
+        self.weights = class_weights
+
+    def forward(self, pred, gt):
+        if self.weights is not None:
+            assert len(self.weights) == 2
+            loss = self.weights[1] * (gt * torch.log(pred)) + \
+                   self.weights[0] * ((1 - gt) * torch.log(1 - pred))
+        else:
+            loss = gt * torch.log(pred) + (1 - gt) * torch.log(1 - pred)
+
+        return torch.neg(torch.mean(loss))
+
+
 class LossFn:
     def __init__(self, loss_config, loader_config, device):
 
@@ -61,6 +78,7 @@ class LossFn:
             gt = torch.squeeze(gt_onehot).reshape(B, Z, H, W, C)  # reshaping to the original shape
             pred = pred.permute(0, 2, 3, 4, 1)  # for BCE we want classes in the last axis
             loss_fn = nn.BCELoss().to(self.device)
+            # loss_fn = WeightedBinaryCrossEntropy(weights).to(self.device)
         elif name == 'DiceLoss':
             pred = torch.argmax(torch.nn.Softmax(dim=1)(pred), dim=1)
             pred = pred.data.cpu().numpy()

@@ -1,7 +1,7 @@
 # use a fixed random seed to guarantee that when you run the code twice you will get the same outcome
 manual_seed: 0
-experiment_dir: 'Y:\work\results'
-tb_dir: 'Y:\work\runs'
+experiment_dir: '/homes/cmercadante/testAnnotated3D/results'
+tb_dir: '/homes/cmercadante/testAnnotated3D/runs'
 
 # model configuration
 model:
@@ -48,7 +48,7 @@ data-loader:
   # data loaders configuration
   batch_size: 1
   num_workers: 8
-  file_paths: 'Y:\work\datasets\maxillo\ANNOTATED3D\volumes'
+  file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/ANNOTATED3D'
 
   # how many samples we have create from each sample in the original dataset?
   augment_rate: 1

@@ -1,7 +1,7 @@
 # use a fixed random seed to guarantee that when you run the code twice you will get the same outcome
 manual_seed: 0
-experiment_dir: '/nas/softechict-nas-2/cmercadante/results'
-tb_dir: '/nas/softechict-nas-2/cmercadante/runs'
+experiment_dir: '/nas/softechict-nas-2/mcipriano/results/kwak'
+tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
 
 # model configuration
 model:
@@ -32,8 +32,8 @@ optimizer:
 loss:
   # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss
   name:
-    - BCEWithLogitsLoss
-    # - BCELoss
+    # - BCEWithLogitsLoss
+    - CrossEntropyLoss
     # - DiceLoss
 
 lr_scheduler:
@@ -46,8 +46,8 @@ lr_scheduler:
 
 data-loader:
   # data loaders configuration
-  batch_size: 4
-  num_workers: 8
+  batch_size: 8
+  num_workers: 0
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/MONOVOLUMES'
 
   # how many samples we have create from each sample in the original dataset?
@@ -61,7 +61,7 @@ data-loader:
   # scale the volume in percentage. factor value [0 - 1]
   do_rescale: false
   scale_factor: 1
-
+  patient_id: 1
   # average center of the volumes
   cut_index: 0.514
 

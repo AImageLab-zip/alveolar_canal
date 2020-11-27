@@ -63,9 +63,9 @@ def main():
     )
 
     if torch.cuda.device_count() > 1:
-        print("Let's use", torch.cuda.device_count(), "GPUs!")
+        logging.info("Let's use {} GPUs".format(torch.cuda.device_count()))
         model = nn.DataParallel(model)
-    
+
     model.to(device)
 
     train_params = model.parameters()
@@ -92,7 +92,7 @@ def main():
     evaluator = Evaluator(loader_config)
 
     alveolar_data = KwakDataloader(config=loader_config)
-    train_id, test_id = alveolar_data.split_dataset(augmentation=False)
+    train_id, test_id = alveolar_data.split_dataset()
 
     model.apply(weight_reset)
     writer = SummaryWriter(log_dir=os.path.join(config['tb_dir'], args.experiment_name), purge_step=0)
@@ -108,7 +108,7 @@ def main():
     )
     test_loader = data.DataLoader(
         alveolar_data,
-        batch_size=1,
+        batch_size=loader_config['batch_size'],
         sampler=SubsetRandomSampler(test_id),
         num_workers=loader_config['num_workers'],
         pin_memory=True,

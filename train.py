@@ -20,11 +20,11 @@ def train(model, train_loader, loss_fn, optimizer, device, epoch, writer, evalua
         optimizer.zero_grad()
         outputs = model(images)
 
-        # labels = crop_spatial_dims(labels, outputs)
+        labels = crop_spatial_dims(labels, outputs)
 
-        outputs = interpolate(outputs, scale_factor=3, mode='trilinear')
+        # outputs = interpolate(outputs, scale_factor=3, mode='trilinear')
         # outputs = interpolate(outputs, scale_factor=3, mode='nearest')
-        outputs = torch.clamp(outputs, min=0.0, max=1.0)
+        # outputs = torch.clamp(outputs, min=0.0, max=1.0)
 
         cur_loss = loss_fn(outputs, labels, warmup, weights)
         if np.isnan(cur_loss.item()):

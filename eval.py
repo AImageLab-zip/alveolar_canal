@@ -15,22 +15,29 @@ class Eval:
     def mean_metric(self):
         return mean(self.metric_list)
 
-    def iou(self, pred, gt):
+    def iou(self, bpred, bgt):
         """
         SHAPE MUST BE
         :param image:
         :param gt:
         :return:
         """
+        batch_size = bpred.shape[0]
         c_score = []
         excluded = ['BACKGROUND', 'UNLABELED']
         labels = [v for k, v in self.classes.items() if k not in excluded]  # exclude background from here
-        for c in labels:
-            gt_class_idx = np.argwhere(gt.flatten() == c)
-            intersection = np.sum(pred.flatten()[gt_class_idx] == c)
-            union = np.argwhere(gt.flatten() == c).size + np.argwhere(pred.flatten() == c).size - intersection
-            c_score.append((intersection + self.eps) / (union + self.eps))
-        self.metric_list.append(sum(c_score) / len(labels))
+        for i in range(batch_size):
+            pred = bpred[i]
+            gt = bgt[i]
+            for c in labels:
+                gt_class_idx = np.argwhere(gt.flatten() == c)
+                intersection = np.sum(pred.flatten()[gt_class_idx] == c)
+                union = np.argwhere(gt.flatten() == c).size + np.argwhere(pred.flatten() == c).size - intersection
+                if union == 0:
+                    continue
+                else:
+                    c_score.append((intersection + self.eps) / (union + self.eps))
+            self.metric_list.append(sum(c_score) / len(labels))
 
     def dice_coefficient(self, pred, gt):
         c_score = []

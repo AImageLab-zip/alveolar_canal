@@ -19,11 +19,11 @@ def test(model, test_loader, loss_fn, device, epoch, writer, evaluator, warmup, 
 
             outputs = model(images)
 
-            # labels = crop_spatial_dims(labels, outputs)
+            labels = crop_spatial_dims(labels, outputs)
 
-            outputs = interpolate(outputs, scale_factor=3, mode='trilinear')
+            # outputs = interpolate(outputs, scale_factor=3, mode='trilinear')
             # outputs = interpolate(outputs, scale_factor=3, mode='nearest')
-            outputs = torch.clamp(outputs, min=0.0, max=1.0)
+            # outputs = torch.clamp(outputs, min=0.0, max=1.0)
 
             cur_loss = loss_fn(outputs, labels, warmup, weights)
             loss_list.append(cur_loss.item())
