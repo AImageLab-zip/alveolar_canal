@@ -16,34 +16,39 @@ import logging
 import torch.nn as nn
 from shutil import copyfile
 import numpy as np
+from os import path
 
 arg_parser = argparse.ArgumentParser()
-arg_parser.add_argument('--experiment_name', default="exp1", help="name of the experiment")
-arg_parser.add_argument('--yaml_path', default="config.yaml", help='path to the yaml config file')
+arg_parser.add_argument('--experiment_path', default="test", help="path to the experiment folder")
+arg_parser.add_argument('--base_config', default="config.yaml", help='path to the yaml config file')
 arg_parser.add_argument('--verbose', action='store_true', help="if true sdout is not redirected")
-arg_parser.add_argument('--save_on_disk', action='store_true', help="if true sdout is not redirected")
+# arg_parser.add_argument('--save_on_disk', action='store_true', help="if true sdout is not redirected")
 
 args = arg_parser.parse_args()
-config = utils.load_config_yaml(args.yaml_path)
-project_dir = os.path.join(config['experiment_dir'], args.experiment_name)
-# creating main directory for this experiment, cp subdir, result subdir, logsubdir
-pathlib.Path(os.path.join(project_dir)).mkdir(parents=True, exist_ok=True)
-pathlib.Path(os.path.join(project_dir, 'checkpoints')).mkdir(parents=True, exist_ok=True)
-pathlib.Path(os.path.join(project_dir, 'files')).mkdir(parents=True, exist_ok=True)
-pathlib.Path(os.path.join(project_dir, 'numpy')).mkdir(parents=True, exist_ok=True)
-# redirect streams to project dir
+project_dir = args.experiment_path
 log_dir = pathlib.Path(os.path.join(project_dir, 'logs'))
-log_dir.mkdir(parents=True, exist_ok=True)
+
+if project_dir != 'test' and path.exists(project_dir):
+    config = utils.load_config_yaml(path.join(project_dir, 'logs', 'config.yaml'))
+else:
+    print('creating a new config file for this experiment.')
+    config = utils.load_config_yaml(path.join('configs', args.base_config))  # load base config
+
+    # creating main directory for this experiment, cp subdir, result subdir, logsubdir
+    pathlib.Path(os.path.join(project_dir)).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(os.path.join(project_dir, 'checkpoints')).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(os.path.join(project_dir, 'files')).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(os.path.join(project_dir, 'numpy')).mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    copyfile(os.path.join('configs', args.base_config), path.join(log_dir, 'config.yaml'))
+    print("local folders and config files creating. going to execute.")
+
+# redirect streams to project dir
 if not args.verbose:
     sys.stdout = open(os.path.join(log_dir, 'std.log'), 'a+')
     sys.stderr = sys.stdout
 utils.set_logger(os.path.join(log_dir, 'logging.log'))
-copyfile(args.yaml_path, os.path.join(log_dir, 'config.yaml'))
-
-
-def weight_reset(m):
-    if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
-        m.reset_parameters()
 
 
 def main():
@@ -52,8 +57,6 @@ def main():
     device = torch.device('cuda' if cuda else 'cpu')
     if cuda:
         logging.info(f"This model will run on {torch.cuda.get_device_name(torch.cuda.current_device())}")
-    else:
-        logging.info("This model will run on CPU")
 
     loader_config = config.get('data-loader', None)
     train_config = config.get('trainer', None)
@@ -61,7 +64,12 @@ def main():
     model = utils.load_model(
         config.get('model'),
         num_classes=len(loader_config['labels']),
-    ).to(device)
+    )
+
+    if torch.cuda.device_count() > 1:
+        logging.info("Let's use {} GPUs".format(torch.cuda.device_count()))
+        model = nn.DataParallel(model)
+    model.to(device)
 
     train_params = model.parameters()
 
@@ -89,10 +97,6 @@ def main():
     alveolar_data = AlveolarDataloader(config=loader_config)
     train_id, test_id = alveolar_data.split_dataset()
 
-    model.apply(weight_reset)
-    writer = SummaryWriter(log_dir=os.path.join(config['tb_dir'], args.experiment_name), purge_step=0)
-    vol_writer = utils.SimpleDumper(loader_config, args.experiment_name, project_dir)
-
     train_loader = data.DataLoader(
         alveolar_data,
         batch_size=loader_config['batch_size'],
@@ -110,7 +114,7 @@ def main():
         drop_last=True
     )
 
-    loss = LossFn(config.get('loss'), loader_config, device)
+    loss = LossFn(config.get('loss'), loader_config, device, weights=alveolar_data.get_weights())
 
     current_epoch = 0
     if train_config['checkpoint_path'] is not None:
@@ -122,6 +126,10 @@ def main():
             logging.info(f"Checkpoint loaded successfully at epoch {current_epoch}, score:{checkpoint.get('metric', 'unavailable')})")
         except OSError as e:
             logging.info("No checkpoint exists from '{}'. Skipping...".format(train_config['checkpoint_path']))
+
+    tb_name = path.basename(path.normpath(args.experiment_path))
+    writer = SummaryWriter(log_dir=os.path.join(config['tb_dir'], tb_name), purge_step=current_epoch)
+    vol_writer = utils.SimpleDumper(loader_config, tb_name, project_dir)
 
     if train_config['do_train']:
         best_metric = 0
@@ -140,13 +148,13 @@ def main():
                 val_metric = test(model, test_loader, loss, device, epoch, writer, evaluator, warm_up[epoch])
                 if val_metric > best_metric:
                     best_metric = val_metric
-                state = {
-                    'epoch': epoch,
-                    'state_dict': model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'metric': best_metric
-                }
-                torch.save(state, os.path.join(project_dir, 'best.pth'))
+                    state = {
+                        'epoch': epoch,
+                        'state_dict': model.state_dict(),
+                        'optimizer': optimizer.state_dict(),
+                        'metric': best_metric
+                    }
+                    torch.save(state, os.path.join(project_dir, 'best.pth'))
 
             if epoch % 10 == 0:
                 state = {
@@ -167,5 +175,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # utils.npy_maker(r'Y:\work\datasets\maxillo\ANNOTATED3D\3labels\06')
     main()

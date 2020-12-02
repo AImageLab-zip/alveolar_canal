@@ -57,15 +57,6 @@ class MultiView(HasTraits):
         self.configure_traits(view=self.view)
 
 
-def delaunay_attempt(gt):
-    extern = np.zeros_like(gt)
-    extern[gt == 0] = 1
-
-    intern = np.zeros_like(gt)
-    intern[gt == 1] = 1
-    MultiView([extern, intern]).show()
-
-
 if __name__ == '__main__':
     path = input('give me the path where i can find: data.npy, gt.npy, pred.npy:')
 

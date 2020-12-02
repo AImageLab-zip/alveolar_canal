@@ -1,6 +1,3 @@
-# use a fixed random seed to guarantee that when you run the code twice you will get the same outcome
-manual_seed: 0
-experiment_dir: 'Y:\work\results'
 tb_dir: 'Y:\work\runs'
 
 # model configuration
@@ -47,17 +44,18 @@ lr_scheduler:
 data-loader:
   # data loaders configuration
   batch_size: 1
-  num_workers: 8
-  file_paths: 'Y:\work\datasets\maxillo\ANNOTATED3D\volumes'
+  num_workers: 0
+  file_paths: 'Y:\work\datasets\maxillo\VOLUMES\'
 
   # how many samples we have create from each sample in the original dataset?
-  augment_rate: 1
+  augment_rate: 0
   # percentage before the warmup reach 1
   warm_up_length: 0.35
 
   # cut so that maxpool does not generate wrong skip features
   do_smart_cut: true
   smart_divisor: 8
+
   # scale the volume in percentage. factor value [0 - 1]
   do_rescale: false
   scale_factor: 1
@@ -70,6 +68,7 @@ data-loader:
     BACKGROUND: 2
     INSIDE: 1
     CONTOUR: 0
+
 #  labels:
-#    BACKGROUND: 1
-#    INSIDE: 0
+#    BACKGROUND: 0
+#    INSIDE: 1

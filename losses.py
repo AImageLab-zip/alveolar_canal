@@ -22,7 +22,7 @@ class DiceLoss(nn.Module):
 
 
 class LossFn:
-    def __init__(self, loss_config, loader_config, device):
+    def __init__(self, loss_config, loader_config, device, weights):
 
         if not isinstance(loss_config['name'], list):
             self.name = [loss_config['name']]
@@ -31,13 +31,14 @@ class LossFn:
         self.loader_config = loader_config
         self.device = device
         self.classes = loader_config['labels']
+        self.weights = weights
 
-    def factory_loss(self, pred, gt, name, warmup, weights):
+    def factory_loss(self, pred, gt, name, warmup):
 
         if name == 'CrossEntropyLoss':
             # sigmoid here which is included in other losses
             pred = torch.nn.Sigmoid()(pred)
-            loss_fn = nn.CrossEntropyLoss(weight=weights).to(self.device)
+            loss_fn = nn.CrossEntropyLoss(weight=self.weights).to(self.device)
         elif name == 'BCEWithLogitsLoss':
             # one hot encoding for cross entropy with digits. Bx1xHxW -> BxCxHxW
             B, C, Z, H, W = pred.shape
@@ -48,7 +49,7 @@ class LossFn:
 
             gt = torch.squeeze(gt_onehot).reshape(B, Z, H, W, C)  # reshaping to the original shape
             pred = pred.permute(0, 2, 3, 4, 1)  # for BCE we want classes in the last axis
-            loss_fn = nn.BCEWithLogitsLoss(pos_weight=weights).to(self.device)
+            loss_fn = nn.BCEWithLogitsLoss(pos_weight=self.weights).to(self.device)
         elif name == 'DiceLoss':
             pred = torch.argmax(torch.nn.Softmax(dim=1)(pred), dim=1)
             pred = pred.data.cpu().numpy()
@@ -59,7 +60,7 @@ class LossFn:
 
         return loss_fn(pred, gt)
 
-    def __call__(self, pred, gt, warmup, weights):
+    def __call__(self, pred, gt, warmup):
         """
         SHAPE MUST BE Bx1xHxW
         :param pred:
@@ -68,5 +69,5 @@ class LossFn:
         """
         result = []
         for name in self.name:
-            result.append(self.factory_loss(pred, gt, name, warmup, weights))
+            result.append(self.factory_loss(pred, gt, name, warmup))
         return sum(result)

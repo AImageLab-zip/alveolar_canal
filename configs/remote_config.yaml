@@ -1,11 +1,8 @@
-# use a fixed random seed to guarantee that when you run the code twice you will get the same outcome
-manual_seed: 0
-experiment_dir: '/nas/softechict-nas-2/mcipriano/results/maxillo/3D'
 tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
 
 # model configuration
 model:
-  # model class, supported values: PadUNet, SegNet, UNet3D, BN_UNet3D, BN_UNet3D_9S, BN_UNet3D_17S
+  # model class, supported values: UNet3D
   name: UNet3D
 
 # trainer configuration
@@ -47,10 +44,10 @@ lr_scheduler:
 data-loader:
   # data loaders configuration
   batch_size: 1
-  num_workers: 8
+  num_workers: 0
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
 
-  augment_rate: 1
+  augment_rate: 0
   warm_up_length: 0.35
 
   # Slice shapes for the network
@@ -64,3 +61,7 @@ data-loader:
     BACKGROUND: 2
     INSIDE: 1
     CONTOUR: 0
+
+#  labels:
+#    BACKGROUND: 0
+#    INSIDE: 1

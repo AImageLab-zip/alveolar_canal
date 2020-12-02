@@ -12,8 +12,24 @@ import torch
 from models.PadUNet3D import padUNet3D
 
 
-def npy_maker(path):
+def convert_to_two_labels(volume):
+    """
+    WARNING: HARD CODED LABELS: USE THIS TOOL AT YOUR OWN RISK!
+    :param volume: ground truth volume to convert
+    :return: converted ground truth volume
+    """
+    volume[volume == 0] = 1
+    volume[volume == 3] = 2
+    volume[volume == 2] = 0
+    return volume
 
+
+def npy_maker(path):
+    """
+    creating a npy file from a set of mask images.
+    obsolete with tool version 1.1
+    :param path: path to the image folder
+    """
     idxs = [
             int(re.search('(\d{1,5})_mask.png', filename).group(1))
             for filename in listdir(join(path, 'mask'))

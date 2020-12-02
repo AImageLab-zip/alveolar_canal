@@ -2,6 +2,8 @@ import numpy as np
 import torch
 import logging
 from tqdm import tqdm
+from torch.cuda.amp import GradScaler
+from torch.cuda.amp import autocast
 
 
 def train(model, train_loader, loss_fn, optimizer, device, epoch, writer, evaluator, warmup):
@@ -9,20 +11,26 @@ def train(model, train_loader, loss_fn, optimizer, device, epoch, writer, evalua
     model.train()
     loss_list = []
     evaluator.reset_eval()
+    scaler = GradScaler()
 
-    for i, (images, labels, weights) in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
+    for i, (images, labels) in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
 
         images, labels = images.to(device), labels.to(device)
         optimizer.zero_grad()
-        outputs = model(images)
+        with autocast():
+            outputs = model(images)
+            cur_loss = loss_fn(outputs, labels, warmup)
 
-        cur_loss = loss_fn(outputs, labels, warmup, weights)
         if np.isnan(cur_loss.item()):
             raise ValueError('Loss is nan during training...')
         loss_list.append(cur_loss.item())
 
-        cur_loss.backward()
-        optimizer.step()
+        # cur_loss.backward()
+        scaler.scale(cur_loss).backward()
+
+        # optimizer.step()
+        scaler.step(optimizer)
+        scaler.update()
 
         # final predictions
         outputs = torch.argmax(torch.nn.Softmax(dim=1)(outputs), dim=1)

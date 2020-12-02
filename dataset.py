@@ -20,10 +20,12 @@ class AlveolarDataloader(Dataset):
         }
         self.cut_idx = config.get('cut_index', 0.5)
 
+        gt_filename = 'gt_4labels.npy' if len(self.config['labels']) > 2 else 'gt_2labels.npy'
+
         for folder in os.listdir(config['file_paths']):
 
             data = np.load(os.path.join(config['file_paths'], folder, 'data.npy'))
-            gt = np.load(os.path.join(config['file_paths'], folder, 'gt_volume.npy'))
+            gt = np.load(os.path.join(config['file_paths'], folder, gt_filename))
 
             # pre-processing on the channels
             if data.ndim == 4:  # (B, H, W, 3) becomes  (B, H, W)
@@ -31,59 +33,28 @@ class AlveolarDataloader(Dataset):
             if gt.ndim == 4:  # (B, H, W, 3) becomes  (B, H, W,)
                 gt = np.take(gt, 0, axis=-1)
 
-            from visualize_results import delaunay_attempt
-            delaunay_attempt(gt)
-
+            # split jawbone in two pieces
             right, left = np.split(data, [int(self.cut_idx * data.shape[2])], axis=2)
             gright, gleft = np.split(gt, [int(self.cut_idx * data.shape[2])], axis=2)
+
+            # lateral cut to make it feasable for maxpooling layers
             if self.config.get('do_smart_cut', False):
                 right, gright = Resize(self.config.get('labels', 1), self.config.get('smart_divisor', 8))([right, gright])
                 left, gleft = Resize(self.config.get('labels', 1), self.config.get('smart_divisor', 8))([left, gleft])
 
-
-            #debug
-            def checkth(th, right):
-                debug = np.zeros_like(right)
-                val = 255
-                axis = 0
-                while right[axis, :, :].max() < th:
-                    axis = axis + 1
-                axis = 0
-                while right[:, axis, :].max() < th:
-                    debug[:, axis, :] = val
-                    axis = axis + 1
-                axis = 0
-                while right[:, :, axis].max() < th:
-                    debug[:, : axis] = val
-                    axis = axis + 1
-                axis = -1
-                while right[axis, :, :].max() < th:
-                    debug[axis, :, :] = val
-                    axis = axis - 1
-                axis = -1
-                while right[:, axis, :].max() < th:
-                    debug[:, axis, :] = val
-                    axis = axis - 1
-                axis = -1
-                while right[:, :, axis].max() < th:
-                    debug[:, :, axis] = val
-                    axis = axis - 1
-                return debug
-
-            from visualize_results import MultiView
-            debug = checkth(0.78, right)
-            MultiView([(right, .5), gright], [(right, .5), gright, debug]).show()
-
-            #end debug
             self.patients['data'] += [right, left]
             self.patients['gt'] += [gright, gleft]
 
-        self.seed = GLOBAL_RANDOM_STATE.randint(10000000)
+        self.seed = GLOBAL_RANDOM_STATE.randint(41)
         self.random_state = np.random.RandomState(self.seed)
         self.indices = {}
+        self.weights = self.median_frequency_balancing()
 
     def __len__(self):
         return self.indices['train'].size + self.indices['test'].size
+
+    def get_weights(self):
+        return self.weights
 
     def augment_dataset(self):
         augmentation = transforms.Compose([
@@ -94,7 +65,7 @@ class AlveolarDataloader(Dataset):
             ElasticDeformation(self.random_state, execution_probability=0.80),
         ])
 
-        augment_rate = self.config.get('augment_rate', 1)
+        augment_rate = self.config.get('augment_rate', 0)
         for idx in self.indices['train']:
             vol, gt = self.patients['data'][idx], self.patients['gt'][idx]
             for i in range(augment_rate):
@@ -115,16 +86,7 @@ class AlveolarDataloader(Dataset):
 
         vol, gt = Normalize()([vol, gt])
 
-        # WEIGHTS COMPUTATION
-        weights = torch.zeros(len(self.config['labels']), dtype=torch.float32)  # init vector
-        for label in self.config['labels']:
-            weights[self.config['labels'][label]] = (gt.numel() / (gt == self.config['labels'][label]).sum())
-
-        if 'UNLABELED' in self.config['labels']:  # set unlabelled weight to 0 if not binary task
-            weights[self.config['labels']['UNLABELED']] = 0
-        weights = weights / weights.sum()  # normalising
-
-        return vol, gt, weights
+        return vol, gt
 
     def split_dataset(self, test_patient_idx=None):
 
@@ -143,8 +105,41 @@ class AlveolarDataloader(Dataset):
         augmented_idx = np.arange(num_patient, num_patient + tot_new)
         self.indices['train'] = np.concatenate((self.indices['train'], augmented_idx))
 
-        np.random.seed(40)
+        np.random.seed(41)
         np.random.shuffle(self.indices['train'])
 
         return self.indices['train'], self.indices['test']
 
+    def class_freq(self):
+        """
+        Computes class frequencies for each label.
+        Returns the number of pixels of class c (in all images) divided by the total number of pixels (in images where c is present).
+        Returns:
+            (torch.Tensor): tensor with shape n_labels, with class frequencies for each label.
+        """
+        num_labels = len(self.config['labels'])
+        class_pixel_count = torch.zeros(num_labels)
+        total_pixel_count = torch.zeros(num_labels)
+
+        for gt in self.patients['gt']:
+            gt_ = torch.from_numpy(gt)
+            counts = torch.bincount(gt_.flatten())
+            class_pixel_count += counts
+            n_pixels = gt_.numel()
+            total_pixel_count = torch.where(counts > 0, total_pixel_count + n_pixels, total_pixel_count)
+
+        return class_pixel_count / total_pixel_count
+
+    def median_frequency_balancing(self):
+        """
+        Computes class weights using Median Frequency Balancing.
+        Source paper: https://arxiv.org/pdf/1411.4734.pdf (par. 6.3.2)
+        Returns:
+            (torch.Tensor): class weights
+        """
+        freq = self.class_freq()
+        sorted, _ = torch.sort(freq)
+        median = torch.median(freq)
+        weights = median / sorted
+        weights /= weights.sum()  # normalizing
+        return weights
