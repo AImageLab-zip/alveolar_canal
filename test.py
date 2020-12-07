@@ -2,9 +2,10 @@ import torch
 import logging
 import numpy as np
 from tqdm import tqdm
+from torch.nn.functional import interpolate
+from augmentations import Resize
 
-
-def test(model, test_loader, loss_fn, device, epoch, writer, evaluator, warmup, dumper=None):
+def test(model, test_loader, loss_fn, device, epoch, writer, evaluator, warmup, dumper=None, do_rescale=None):
 
     model.eval()
     with torch.no_grad():
@@ -14,7 +15,14 @@ def test(model, test_loader, loss_fn, device, epoch, writer, evaluator, warmup, 
 
             images, labels = images.to(device), labels.to(device)
 
-            outputs = model(images)
+            if not do_rescale or do_rescale == 1:
+                outputs = model(images)
+            else:
+                images = images.unsqueeze(0)
+                orig_shape = images.shape
+                images, _ = Resize(labels=None, divisor=8)([images, None])
+                outputs = model(interpolate(images, scale_factor=0.8, mode='trilinear', align_corners=False))
+                outputs = interpolate(outputs, size=orig_shape, mode='trilinear', align_corners=False)
 
             cur_loss = loss_fn(outputs, labels, warmup)
             loss_list.append(cur_loss.item())
@@ -30,7 +38,6 @@ def test(model, test_loader, loss_fn, device, epoch, writer, evaluator, warmup, 
 
             if dumper is not None:
                 dumper.dump(images, labels, outputs, i)
-
 
     epoch_val_loss = sum(loss_list) / len(loss_list)
     epoch_val_metric = evaluator.mean_metric()

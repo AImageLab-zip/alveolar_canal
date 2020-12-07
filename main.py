@@ -42,7 +42,7 @@ else:
     log_dir.mkdir(parents=True, exist_ok=True)
 
     copyfile(os.path.join('configs', args.base_config), path.join(log_dir, 'config.yaml'))
-    print("local folders and config files creating. going to execute.")
+    print("local folders and config files created. going to execute.")
 
 # redirect streams to project dir
 if not args.verbose:
@@ -107,7 +107,7 @@ def main():
     )
     test_loader = data.DataLoader(
         alveolar_data,
-        batch_size=loader_config['batch_size'],
+        batch_size=1,
         sampler=SubsetRandomSampler(test_id),
         num_workers=loader_config['num_workers'],
         pin_memory=True,
@@ -145,7 +145,7 @@ def main():
                 scheduler.step(current_epoch)
 
             if epoch % train_config.get('validate_after_iters', 2) == 0:
-                val_metric = test(model, test_loader, loss, device, epoch, writer, evaluator, warm_up[epoch])
+                val_metric = test(model, test_loader, loss, device, epoch, writer, evaluator, warm_up[epoch], do_rescale=loader_config.get('scale_factor', None))
                 if val_metric > best_metric:
                     best_metric = val_metric
                     state = {
@@ -170,7 +170,7 @@ def main():
         logging.info('BEST METRIC IS {}'.format(best_metric))
 
     # final test
-    test_score = test(model, test_loader, loss, device, train_config['epochs'] + 1, writer, evaluator, 1, dumper=vol_writer)
+    test_score = test(model, test_loader, loss, device, train_config['epochs'] + 1, writer, evaluator, 1, dumper=vol_writer, do_rescale=loader_config.get('scale_factor', None))
     logging.info('TEST METRIC IS {}'.format(test_score))
 
 

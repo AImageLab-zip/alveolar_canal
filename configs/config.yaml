@@ -2,8 +2,8 @@ tb_dir: 'Y:\work\runs'
 
 # model configuration
 model:
-  # model class, supported values: PadUNet, SegNet, UNet3D, BN_UNet3D, BN_UNet3D_9S, BN_UNet3D_17S
-  name: UNet3D
+  # model class, supported values: UNet3D, RESNET18
+  name: RESNET18
 
 # trainer configuration
 trainer:
@@ -47,18 +47,22 @@ data-loader:
   num_workers: 0
   file_paths: 'Y:\work\datasets\maxillo\VOLUMES\'
 
+  test_patients_id:
+    - 0
+
+  # create arch line and set to zero all the values out of the arch
+  background_suppression: True
+
   # how many samples we have create from each sample in the original dataset?
   augment_rate: 0
   # percentage before the warmup reach 1
   warm_up_length: 0.35
 
-  # cut so that maxpool does not generate wrong skip features
-  do_smart_cut: true
-  smart_divisor: 8
+  # cut so that maxpool does not generate wrong skip features (8 for unet)
+  LCM_cut_factor: 32
 
   # scale the volume in percentage. factor value [0 - 1]
-  do_rescale: false
-  scale_factor: 1
+  scale_factor: 0.8
 
   # average center of the volumes
   cut_index: 0.514

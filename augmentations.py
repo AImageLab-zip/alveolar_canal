@@ -201,6 +201,7 @@ class Rescale:
         self.labels = labels
 
     def __call__(self, data):
+        data = ToTensor()(data)
         image, mask = data
         assert image.shape == mask.shape
         assert image.ndim == 3
@@ -208,20 +209,20 @@ class Rescale:
         mask = mask.unsqueeze(0).unsqueeze(0).type(torch.float32)
         gt_vol = interpolate(mask, scale_factor=self.scale_factor, mode='nearest').type(torch.int64).squeeze()
 
-        # we dedicate a special case for contour since scaling its label from the entire gt volume using nearest
-        # would result in a very sparse contour surface. hence we create a specific unlabbeld volume where we
+        # special case for contour since scaling its label from the entire gt volume using nearest
+        # would result in a very sparse contour surface: we create a specific unlabelled volume where we
         # insert only the contour labels, scale it and threshold it, finally we merge it on the scaled gt volume
         if 'CONTOUR' in self.labels:
             contour_gt = torch.full_like(mask, self.labels['UNLABELED'])
             contour_gt[mask == self.labels['CONTOUR']] = self.labels['CONTOUR']
-            contour_gt = interpolate(contour_gt, scale_factor=self.scale_factor, mode='trilinear').squeeze()
+            contour_gt = interpolate(contour_gt, scale_factor=self.scale_factor, mode='trilinear', align_corners=False).squeeze()
             contour_gt[(contour_gt > self.labels['CONTOUR'] - 1/6) & (contour_gt < self.labels['CONTOUR'] + 1/6)] = self.labels['CONTOUR']
             contour_gt = contour_gt.type(torch.int64)
             gt_vol[contour_gt == self.labels['CONTOUR']] = self.labels['CONTOUR']
 
-        image = interpolate(image, scale_factor=self.scale_factor, mode='trilinear').squeeze()
+        image = interpolate(image, scale_factor=self.scale_factor, mode='trilinear', align_corners=False).squeeze()
 
-        return [image, gt_vol]
+        return [image.numpy(), gt_vol.numpy()]
 
 
 class Resize:
@@ -232,17 +233,37 @@ class Resize:
 
     def closestDistanceForDivision(self, number):
 
-        q = (number / self.divisor).astype(np.int)
-
+        q = np.floor(number / self.divisor).astype(np.int)
         # possible closest numbers
         n1 = self.divisor * q
-        return number - n1
+        return n1
 
         # if you want to choose between the lower and upper bound use the following
         # n2 = (self.divisor * (q + 1))
         # choices = np.stack((number - n1, number - n2))
         # idx = np.argmin(np.abs(choices), axis=0)
         # return choices[idx, np.indices(idx.shape)[0]]
+
+    def reshape(self, data, new_shape):
+        image, mask = data
+        target_Z, target_H, target_W = new_shape
+        Z, H, W = image.shape
+        # if dest shape is bigger than current shape needs to pad
+        H_pad = max(target_H - H, 0) // 2
+        W_pad = max(target_W - W, 0) // 2
+        Z_pad = max(target_Z - Z, 0) // 2
+        # if dest shape is lower than current shape needs to crop
+        H_crop = max(H - target_H, 0) // 2
+        W_crop = max(W - target_W, 0) // 2
+        Z_crop = max(Z - target_Z, 0) // 2
+
+        new_gt = np.full((target_Z, target_H, target_W), fill_value=self.labels['BACKGROUND'])
+        new_data = np.zeros((target_Z, target_H, target_W))
+
+        new_data[Z_pad:Z + Z_pad, H_pad:H + H_pad, W_pad:W + W_pad] = image[Z_crop:target_Z + Z_crop, H_crop:target_H + H_crop, W_crop:target_W + W_crop]
+        new_gt[Z_pad:Z + Z_pad, H_pad:H + H_pad, W_pad:W + W_pad] = mask[Z_crop:target_Z + Z_crop, H_crop:target_H + H_crop, W_crop:target_W + W_crop]
+
+        return [new_data, new_gt]
 
     def __call__(self, data):
         image, mask = data

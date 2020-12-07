@@ -5,6 +5,7 @@ import os
 from matplotlib import pyplot as plt
 from augmentations import RandomRotate, RandomContrast, ElasticDeformation, Normalize, ToTensor, RandomHorizontalFlip, RandomVerticalFlip, Resize, Rescale
 import torch
+import utils
 
 GLOBAL_RANDOM_STATE = np.random.RandomState(47)
 
@@ -18,36 +19,63 @@ class AlveolarDataloader(Dataset):
             'data': [],
             'gt': []
         }
+        self.indices = {
+            'test': [],
+            'train': []
+        }
+
         self.cut_idx = config.get('cut_index', 0.5)
+
+        test_ids = self.config.get('test_patients_id', [0, 1])
+        if not isinstance(test_ids, list):
+            raise Exception('provide test patients ids as a list')
 
         gt_filename = 'gt_4labels.npy' if len(self.config['labels']) > 2 else 'gt_2labels.npy'
 
-        for folder in os.listdir(config['file_paths']):
+        index = 0
+        for patient_num, folder in enumerate(os.listdir(config['file_paths'])):
 
             data = np.load(os.path.join(config['file_paths'], folder, 'data.npy'))
             gt = np.load(os.path.join(config['file_paths'], folder, gt_filename))
 
-            # pre-processing on the channels
-            if data.ndim == 4:  # (B, H, W, 3) becomes  (B, H, W)
-                data = np.take(data, 0, axis=-1)
-            if gt.ndim == 4:  # (B, H, W, 3) becomes  (B, H, W,)
-                gt = np.take(gt, 0, axis=-1)
+            # fixing channels if needed
+            if data.ndim == 4 or gt.ndim == 4:  # (B, H, W, 3) becomes  (B, H, W)
+                raise Exception('weird number of dimension for patient {}'.format(folder))
 
-            # split jawbone in two pieces
-            right, left = np.split(data, [int(self.cut_idx * data.shape[2])], axis=2)
-            gright, gleft = np.split(gt, [int(self.cut_idx * data.shape[2])], axis=2)
+            # fixing values if needed
+            if data.max() > 1:
+                data = data.astype(np.float) / data.max()
 
-            # lateral cut to make it feasable for maxpooling layers
-            if self.config.get('do_smart_cut', False):
-                right, gright = Resize(self.config.get('labels', 1), self.config.get('smart_divisor', 8))([right, gright])
-                left, gleft = Resize(self.config.get('labels', 1), self.config.get('smart_divisor', 8))([left, gleft])
+            if patient_num in test_ids:
+                # this patient is for testing, won't change anything here
+                self.indices['test'].append(index)
+                self.patients['data'].append(data)
+                self.patients['gt'].append(gt)
+                index = index + 1
+            else:
+                # train data -> split jawbone in two pieces
+                right, gright, left, gleft = self.preprocessing(data, gt)
+                self.patients['data'] += [right, left]
+                self.patients['gt'] += [gright, gleft]
+                self.indices['train'] += [index, index + 1]
+                index = index + 2
 
-            self.patients['data'] += [right, left]
-            self.patients['gt'] += [gright, gleft]
+        # pad all the volumes in the training set to the same shape
+        LCM = self.config.get('LCM_cut_factor', 1)
+        resizer = Resize(self.config.get('labels'), LCM)
+        final_shape = max([self.patients['data'][i].shape for i in self.indices['train']])
+        final_shape = resizer.closestDistanceForDivision(np.asarray(final_shape))
+        for i in range(len(self.patients['data'])):
+            self.patients['data'][i], self.patients['gt'][i] = resizer.reshape(
+                [self.patients['data'][i], self.patients['gt'][i]],
+                new_shape=final_shape
+            )
+
+        self.indices['train'] = np.asarray(self.indices['train'])
+        self.indices['test'] = np.asarray(self.indices['test'])
 
         self.seed = GLOBAL_RANDOM_STATE.randint(41)
         self.random_state = np.random.RandomState(self.seed)
-        self.indices = {}
         self.weights = self.median_frequency_balancing()
 
     def __len__(self):
@@ -55,6 +83,26 @@ class AlveolarDataloader(Dataset):
 
     def get_weights(self):
         return self.weights
+
+    def preprocessing(self, data, gt):
+
+        # suppress areas out of the splines
+        if self.config.get('background_suppression', True):
+            data = utils.background_suppression(data)
+
+        # rescale
+        if self.config.get('scale_factor', 1) != 1:
+            data, gt = Rescale(self.config.get('scale_factor', 0.5), self.config.get('labels'))([data, gt])
+
+        # cut the overflowing null areas -> extract cube with extreme limits of where are the values != 0
+        xs, ys, zs = np.where(data != 0)
+        data = data[min(xs):max(xs) + 1, min(ys):max(ys) + 1, min(zs):max(zs) + 1]
+        gt = gt[min(xs):max(xs) + 1, min(ys):max(ys) + 1, min(zs):max(zs) + 1]
+
+        # split the jawbone in two pieces
+        right, left = np.split(data, [int(self.cut_idx * data.shape[2])], axis=2)
+        gright, gleft = np.split(gt, [int(self.cut_idx * data.shape[2])], axis=2)
+        return right, gright, left, gleft
 
     def augment_dataset(self):
         augmentation = transforms.Compose([
@@ -78,28 +126,16 @@ class AlveolarDataloader(Dataset):
     def __getitem__(self, index):
 
         vol, gt = self.patients['data'][index], self.patients['gt'][index]
-
         vol, gt = ToTensor()([vol, gt])
-
-        if self.config.get('do_rescale', False):
-            vol, gt = Rescale(self.config.get('scale_factor', 0.5), self.config.get('labels'))([vol, gt])
-
         vol, gt = Normalize()([vol, gt])
 
         return vol, gt
 
-    def split_dataset(self, test_patient_idx=None):
+    def split_dataset(self):
 
         num_patient = len(self.patients['data'])
         if num_patient < 2:
             raise Exception('less available patients than the ones required for training validate and test!')
-
-        test_id = 0 if not test_patient_idx else test_patient_idx
-
-        self.indices = {
-            'test': np.asarray([test_id]),
-            'train': np.asarray([i for i in range(num_patient) if i != test_id])
-        }
 
         tot_new = self.augment_dataset()
         augmented_idx = np.arange(num_patient, num_patient + tot_new)
