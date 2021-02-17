@@ -1,0 +1,15 @@
+output:
+  panorex: true
+  volume_overview: true
+  side_cuts: true
+
+directories:
+    gt: 'C:\Users\marco\Desktop\test\volumi\133_gt.npy'
+    dicom: 'Y:\work\datasets\maxillo\DICOM\P133\DICOMDIR'
+    net_weights: 'C:\Users\marco\Desktop\test\best.pth'
+
+experiment:
+    preprocessing: false
+    scale: 0.5
+    network: 'UNet3D'
+    patient: 188  # this is used to make a custom folder in the tests dir

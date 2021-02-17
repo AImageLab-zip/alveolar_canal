@@ -21,12 +21,11 @@ class ToPilImage:
 
 class RandomHorizontalFlip:
 
-    def __init__(self, random_state, execution_probability=0.5):
-        self.random_state = random_state
+    def __init__(self, execution_probability=0.5):
         self.execution_probability = execution_probability
 
     def __call__(self, data):
-        if self.random_state.uniform() < self.execution_probability:
+        if np.random.uniform(0, 1) < self.execution_probability:
             image, mask = data
             image = np.flip(image, axis=1)
             mask = np.flip(mask, axis=1)
@@ -36,12 +35,11 @@ class RandomHorizontalFlip:
 
 class RandomVerticalFlip:
 
-    def __init__(self, random_state, execution_probability=0.5):
-        self.random_state = random_state
+    def __init__(self, execution_probability=0.5):
         self.execution_probability = execution_probability
 
     def __call__(self, data):
-        if self.random_state.uniform() < self.execution_probability:
+        if np.random.uniform(0, 1) < self.execution_probability:
             image, mask = data
             image = np.flip(image, axis=2)
             mask = np.flip(mask, axis=2)
@@ -54,15 +52,11 @@ class ToTensor:
     def __init__(self):
         pass
 
-    def __call__(self, data):
-        image, mask = data
-        # Transform to tensor
-        image = torch.from_numpy(image.astype(np.float32))
-        mask = torch.from_numpy(mask.astype(np.int64))
-        if image.ndim == 2:
-            image = torch.unsqueeze(image, dim=0)
-            mask = torch.unsqueeze(mask, dim=0)
-        return [image, mask]
+    def __call__(self, volume):
+        volume = torch.from_numpy(volume)
+        if volume.ndim == 2:
+            volume = torch.unsqueeze(volume, dim=0)
+        return volume
 
 
 class RandomContrast:
@@ -75,22 +69,21 @@ class RandomContrast:
         result (numpy array): image with higer contrast
     """
 
-    def __init__(self, random_state, alpha=(0.8, 2), execution_probability=0.1, **kwargs):
-        self.random_state = random_state
+    def __init__(self, alpha=(0.8, 2), execution_probability=0.1, **kwargs):
         assert len(alpha) == 2
         self.alpha = alpha
         self.execution_probability = execution_probability
 
     def __call__(self, data):
-        if self.random_state.uniform() < self.execution_probability:
+        if np.random.uniform(0, 1) < self.execution_probability:
             image, mask = data
 
-            assert image.shape == mask.shape
+            # assert image.shape == mask.shape
             assert image.ndim == 3
             if image.max() > 1 or image.min() < 0:
                 image, _ = Normalize()([image, mask])
 
-            clip_limit = self.random_state.uniform(self.alpha[0], self.alpha[1])
+            clip_limit = np.random.uniform(self.alpha[0], self.alpha[1])
             clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(8, 8))
 
             sharp = image * 255  # [0 - 255]
@@ -109,24 +102,21 @@ class RandomRotate:
     Rotation axis is picked at random from the list of provided axes.
     """
 
-    def __init__(self, random_state, angle_spectrum=45, mode='reflect', order=0, execution_probability=0.5, **kwargs):
+    def __init__(self, angle_spectrum=8, mode='nearest', order=0, execution_probability=0.5, **kwargs):
 
-        self.random_state = random_state
         self.angle_spectrum = angle_spectrum
         self.mode = mode
         self.order = order
         self.execution_probability = execution_probability
 
     def __call__(self, data):
-        if self.random_state.uniform() < self.execution_probability:
-            angle = self.random_state.randint(-self.angle_spectrum, self.angle_spectrum)
+        if np.random.uniform(0, 1) < self.execution_probability:
+            angle = np.random.randint(-self.angle_spectrum, self.angle_spectrum)
             image, mask = data
-            assert image.shape == mask.shape
+            # assert image.shape == mask.shape
             assert image.ndim == 3
-            C = image.shape[0]
-            for i in range(C):
-                image[i] = rotate(image[i], angle, axes=(1, 0), reshape=False, order=self.order, mode=self.mode, cval=-1)
-                mask[i] = rotate(mask[i], angle, axes=(1, 0), reshape=False, order=self.order, mode=self.mode, cval=-1)
+            image = rotate(image, angle, axes=(0, 2), reshape=False, order=self.order, mode=self.mode)
+            mask = rotate(mask, angle, axes=(0, 2), reshape=False, order=self.order, mode=self.mode)
             return [image, mask]
         return data
 
@@ -139,7 +129,7 @@ class ElasticDeformation:
     Based on: https://github.com/fcalvet/image_tools/blob/master/image_augmentation.py#L62
     """
 
-    def __init__(self, random_state, spline_order=2, alpha=100, sigma=30, execution_probability=0.1,
+    def __init__(self, spline_order=2, alpha=100, sigma=30, execution_probability=0.1,
                  **kwargs):
         """
         :param spline_order: the order of spline interpolation (use 0 for labeled images)
@@ -148,33 +138,36 @@ class ElasticDeformation:
         :param execution_probability: probability of executing this transform
         :param apply_3d: if True apply deformations in each axis
         """
-        self.random_state = random_state
         self.spline_order = spline_order
-        self.alpha = self.random_state.uniform() * alpha
-        self.sigma = self.random_state.uniform() * sigma
+        self.alpha = np.random.uniform() * alpha
+        self.sigma = np.random.uniform() * sigma
         self.execution_probability = execution_probability
 
+    def deformate(self, volume, spline_order=0):
+        y_dim, x_dim = volume[0].shape
+        y, x = np.meshgrid(np.arange(y_dim), np.arange(x_dim), indexing='ij')
+
+        C = volume.shape[0]
+        for i in range(C):
+            dy, dx = [
+                gaussian_filter(
+                    np.random.randn(*volume[0].shape),
+                    self.sigma, mode="reflect"
+                ) * self.alpha for _ in range(2)
+            ]
+            indices = y + dy, x + dx
+            volume[i] = map_coordinates(volume[i], indices, order=spline_order, mode='reflect')
+        return volume
+
     def __call__(self, data):
-        if self.random_state.uniform() < self.execution_probability:
+        if np.random.uniform(0, 1) < self.execution_probability:
             image, mask = data
 
-            assert image.shape == mask.shape
+            # assert image.shape == mask.shape
             assert image.ndim == 3
 
-            y_dim, x_dim = image[0].shape
-            y, x = np.meshgrid(np.arange(y_dim), np.arange(x_dim), indexing='ij')
-
-            C = image.shape[0]
-            for i in range(C):
-                dy, dx = [
-                    gaussian_filter(
-                        self.random_state.randn(*image[0].shape),
-                        self.sigma, mode="reflect"
-                    ) * self.alpha for _ in range(2)
-                ]
-                indices = y + dy, x + dx
-                image[i] = map_coordinates(image[i], indices, order=self.spline_order, mode='reflect')
-                mask[i] = map_coordinates(mask[i], indices, order=0, mode='reflect')
+            image = self.deformate(image, self.spline_order)
+            mask = self.deformate(mask, 0)
             return [image, mask]
         return data
 
@@ -201,28 +194,17 @@ class Rescale:
         self.labels = labels
 
     def __call__(self, data):
-        data = ToTensor()(data)
-        image, mask = data
-        assert image.shape == mask.shape
+
+        if self.scale_factor == 1:
+            return data
+
+        image = ToTensor()(data)
         assert image.ndim == 3
+
         image = image.unsqueeze(0).unsqueeze(0)
-        mask = mask.unsqueeze(0).unsqueeze(0).type(torch.float32)
-        gt_vol = interpolate(mask, scale_factor=self.scale_factor, mode='nearest').type(torch.int64).squeeze()
+        image = interpolate(image, scale_factor=self.scale_factor, mode='trilinear', align_corners=False, recompute_scale_factor=False).squeeze()
 
-        # special case for contour since scaling its label from the entire gt volume using nearest
-        # would result in a very sparse contour surface: we create a specific unlabelled volume where we
-        # insert only the contour labels, scale it and threshold it, finally we merge it on the scaled gt volume
-        if 'CONTOUR' in self.labels:
-            contour_gt = torch.full_like(mask, self.labels['UNLABELED'])
-            contour_gt[mask == self.labels['CONTOUR']] = self.labels['CONTOUR']
-            contour_gt = interpolate(contour_gt, scale_factor=self.scale_factor, mode='trilinear', align_corners=False).squeeze()
-            contour_gt[(contour_gt > self.labels['CONTOUR'] - 1/6) & (contour_gt < self.labels['CONTOUR'] + 1/6)] = self.labels['CONTOUR']
-            contour_gt = contour_gt.type(torch.int64)
-            gt_vol[contour_gt == self.labels['CONTOUR']] = self.labels['CONTOUR']
-
-        image = interpolate(image, scale_factor=self.scale_factor, mode='trilinear', align_corners=False).squeeze()
-
-        return [image.numpy(), gt_vol.numpy()]
+        return image.numpy()
 
 
 class Resize:
@@ -233,7 +215,7 @@ class Resize:
 
     def closestDistanceForDivision(self, number):
 
-        q = np.floor(number / self.divisor).astype(np.int)
+        q = np.ceil(number / self.divisor).astype(np.int)
         # possible closest numbers
         n1 = self.divisor * q
         return n1
@@ -244,10 +226,10 @@ class Resize:
         # idx = np.argmin(np.abs(choices), axis=0)
         # return choices[idx, np.indices(idx.shape)[0]]
 
-    def reshape(self, data, new_shape):
-        image, mask = data
+    def reshape(self, volume, new_shape, pad_val=0):
+
         target_Z, target_H, target_W = new_shape
-        Z, H, W = image.shape
+        Z, H, W = volume.shape
         # if dest shape is bigger than current shape needs to pad
         H_pad = max(target_H - H, 0) // 2
         W_pad = max(target_W - W, 0) // 2
@@ -257,13 +239,14 @@ class Resize:
         W_crop = max(W - target_W, 0) // 2
         Z_crop = max(Z - target_Z, 0) // 2
 
-        new_gt = np.full((target_Z, target_H, target_W), fill_value=self.labels['BACKGROUND'])
-        new_data = np.zeros((target_Z, target_H, target_W))
+        if isinstance(volume, np.ndarray):
+            result = np.full((target_Z, target_H, target_W), fill_value=pad_val, dtype=volume.dtype)
+        else:
+            result = torch.full((target_Z, target_H, target_W), fill_value=pad_val, dtype=volume.dtype)
 
-        new_data[Z_pad:Z + Z_pad, H_pad:H + H_pad, W_pad:W + W_pad] = image[Z_crop:target_Z + Z_crop, H_crop:target_H + H_crop, W_crop:target_W + W_crop]
-        new_gt[Z_pad:Z + Z_pad, H_pad:H + H_pad, W_pad:W + W_pad] = mask[Z_crop:target_Z + Z_crop, H_crop:target_H + H_crop, W_crop:target_W + W_crop]
+        result[Z_pad:Z + Z_pad, H_pad:H + H_pad, W_pad:W + W_pad] = volume[Z_crop:target_Z + Z_crop, H_crop:target_H + H_crop, W_crop:target_W + W_crop]
 
-        return [new_data, new_gt]
+        return result
 
     def __call__(self, data):
         image, mask = data

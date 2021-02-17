@@ -1,5 +1,6 @@
 import torch 
 import torch.nn as nn
+from torch.cuda.amp import autocast
 
 
 class padUNet3D(nn.Module):
@@ -7,7 +8,7 @@ class padUNet3D(nn.Module):
         self.in_channel = 1
         self.n_classes = n_classes
         super(padUNet3D, self).__init__()
-        self.ec0 = self.conv3Dblock(self.in_channel, 32,)
+        self.ec0 = self.conv3Dblock(self.in_channel, 32)
         self.ec1 = self.conv3Dblock(32, 64, kernel_size=3, padding=1)  # third dimension to even val
         self.ec2 = self.conv3Dblock(64, 64)
         self.ec3 = self.conv3Dblock(64, 128)
@@ -39,37 +40,35 @@ class padUNet3D(nn.Module):
         )
 
     def forward(self, x):
+        with autocast():
+            if x.ndim == 4:
+                x = torch.unsqueeze(x, dim=1)  # add single channel after batchsize
 
-        if x.ndim == 4:
-            x = torch.unsqueeze(x, dim=1)  # add single channel after batchsize
+            h = self.ec0(x)
+            feat_0 = self.ec1(h)
+            h = self.pool0(feat_0)
+            h = self.ec2(h)
+            feat_1 = self.ec3(h)
 
-        h = self.ec0(x)
-        feat_0 = self.ec1(h)
-        h = self.pool0(feat_0)
-        h = self.ec2(h)
-        feat_1 = self.ec3(h)
+            h = self.pool1(feat_1)
+            h = self.ec4(h)
+            feat_2 = self.ec5(h)
 
-        h = self.pool1(feat_1)
-        h = self.ec4(h)
-        feat_2 = self.ec5(h)
+            h = self.pool2(feat_2)
+            h = self.ec6(h)
+            h = self.ec7(h)
 
-        h = self.pool2(feat_2)
-        h = self.ec6(h)
-        h = self.ec7(h)
+            h = torch.cat((self.dc9(h), feat_2), dim=1)
 
-        h = torch.cat((self.dc9(h), feat_2), dim=1)
-        del feat_2
-        h = self.dc8(h)
-        h = self.dc7(h)
+            h = self.dc8(h)
+            h = self.dc7(h)
 
-        h = torch.cat((self.dc6(h), feat_1), dim=1)
-        del feat_1
-        h = self.dc5(h)
-        h = self.dc4(h)
+            h = torch.cat((self.dc6(h), feat_1), dim=1)
+            h = self.dc5(h)
+            h = self.dc4(h)
 
-        h = torch.cat((self.dc3(h), feat_0), dim=1)
-        del feat_0
-        h = self.dc2(h)
-        h = self.dc1(h)
-
-        return self.final(h)
+            h = torch.cat((self.dc3(h), feat_0), dim=1)
+            h = self.dc2(h)
+            h = self.dc1(h)
+        with autocast(enabled=False):
+            return self.final(h.float())

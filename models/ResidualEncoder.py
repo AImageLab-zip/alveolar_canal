@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.cuda.amp import autocast
 
 
 class Flatten(torch.nn.Module):
@@ -99,11 +100,11 @@ class ResNetEncoder(nn.Module):
             nn.Conv3d(8, self.num_classes, kernel_size=3, stride=1, padding=1),
         )
 
-    def forward(self, volume, sparse_ann=False):
+    def forward(self, volume, cast=True):
+        with autocast(enabled=cast):
+            if volume.ndim == 4:
+                volume = torch.unsqueeze(volume, dim=1)
 
-        if volume.ndim == 4:
-            volume = torch.unsqueeze(volume, dim=1)
-
-        z = self.cond_encoder(volume)
-        out = self.decoder(z)
-        return out
+            z = self.cond_encoder(volume)
+            out = self.decoder(z)
+            return out

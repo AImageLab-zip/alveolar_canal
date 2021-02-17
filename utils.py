@@ -9,8 +9,30 @@ import cv2
 import yaml
 import torch.nn as nn
 import torch
+import math
+from models.PadUNet3Dmulti_2 import padUNet3DMulti
 from models.PadUNet3D import padUNet3D
 from models.ResidualEncoder import ResNetEncoder
+from models.ResNet50.ResNet50 import ResNet50
+import sys
+
+
+def fix_dataset_folder(directory):
+    final_files = ['data.npy', 'gt_2labels.npy', 'gt_4labels.npy']
+    for folder in listdir(directory):
+        files = os.listdir(os.path.join(directory, folder))
+        if all(file in final_files for file in files):  # this folder is okay
+            continue
+
+        four_labels = np.load(os.path.join(directory, folder, 'gt_volume.npy'))
+        two_labels = convert_to_two_labels(four_labels)
+
+        os.rename(os.path.join(directory, folder, 'volume.npy'), os.path.join(directory, folder, 'data.npy'))
+        os.rename(os.path.join(directory, folder, 'gt_volume.npy'), os.path.join(directory, folder, 'gt_4labels.npy'))
+        np.save(os.path.join(directory, folder, 'gt_2labels.npy'), two_labels)
+
+        # final check
+        assert all(file in final_files for file in listdir(os.path.join(directory, folder)))
 
 
 def convert_to_two_labels(volume):
@@ -57,15 +79,16 @@ def set_logger(log_path=None):
     logger.setLevel(logging.INFO)
 
     if not logger.handlers:
-        # Logging to a file
-        file_handler = logging.FileHandler(os.path.join(log_path))
-        file_handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s: %(message)s'))
-        logger.addHandler(file_handler)
-
-        # # Logging to console
-        # stream_handler = logging.StreamHandler(sys.stdout)
-        # stream_handler.setFormatter(logging.Formatter('%(message)s'))
-        # logger.addHandler(stream_handler)
+        if not log_path:
+            # Logging to console
+            stream_handler = logging.StreamHandler(sys.stdout)
+            stream_handler.setFormatter(logging.Formatter('%(message)s'))
+            logger.addHandler(stream_handler)
+        else:
+            # Logging to a file
+            file_handler = logging.FileHandler(os.path.join(log_path))
+            file_handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s: %(message)s'))
+            logger.addHandler(file_handler)
 
 
 def load_config_yaml(config_file):
@@ -74,9 +97,13 @@ def load_config_yaml(config_file):
 
 def load_model(model_config, num_classes):
     if model_config['name'] == 'UNet3D':
+        if model_config.get('sharding', False):
+            return padUNet3DMulti(num_classes)
         return padUNet3D(n_classes=num_classes)
     elif model_config['name'] == 'RESNET18':
         return ResNetEncoder(n_classes=num_classes)
+    elif model_config['name'] == 'RESNET50':
+        return ResNet50(out_channels=num_classes)
     else:
         raise Exception("Model not found, check the config.yaml")
 
@@ -106,7 +133,14 @@ def compute_skeleton(img):
             return skel
 
 
-def arch_detection(slice):
+def fill_holes(img):
+    assert np.array_equal(img, img.astype(bool)), "not binary image provided in hole filling"
+    _, labels, stats, _ = cv2.connectedComponentsWithStats(img.astype(np.int8))
+    major_label = np.argsort(-stats[1:, -1])[0] + 1
+    return (labels == major_label).astype(np.int8)
+
+
+def arch_detection(slice, folder, debug=False):
     """
     compute a polynomial spline of the dental arch from a DICOM file
     Args:
@@ -118,70 +152,126 @@ def arch_detection(slice):
         (float) ending value for the X axis
     """
 
-    def score_func(arch, th):
-        tmp = cv2.threshold(arch, th, 1, cv2.THRESH_BINARY)[1].astype(np.uint8)
-        score = tmp[tmp == 1].size / tmp.size
-        return score
-
     # initial closing
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     arch = cv2.morphologyEx(slice, cv2.MORPH_CLOSE, kernel)
 
-    th = 0.50
+    # thresholding to find the dental arch
+    values, bins = np.histogram(arch, bins=40)
+    cumulative = np.cumsum(values) / arch.size  # normalized cumulative hist values
+    suitable_idx = np.abs(cumulative - 0.86).argmin()  # suitable th idx for this slice
+    arch = cv2.threshold(arch, bins[suitable_idx], 1, cv2.THRESH_BINARY)[1]
 
-    max_it = 20
-    step_l = 0.01
-
-    # varying threshold until we white area is about 12%
-    h_th = 0.17
-    l_th = 0.11
-
-    poly_x = [th / 20 for th in range(0, 20, 1)]
-    poly_y = [score_func(arch, th) for th in poly_x]
-    th2score = np.poly1d(np.polyfit(poly_x, poly_y, 12))
-
-    for _ in range(max_it):
-        score = th2score(th)
-        if h_th > score > l_th:
-            arch = cv2.threshold(arch, th, 1, cv2.THRESH_BINARY)[1].astype(np.uint8)
-            break
-        d = -np.polyder(th2score)(th)
-        if score > h_th:
-            th = th + step_l * d  # higher threshold, lower score
-        elif score < l_th:
-            th = th - step_l * d  # lower threshold, higher score
-
-    # major filtering with labelling: first remove all the little white parts
-    ret, labels = cv2.connectedComponents(arch)
-    sizes = np.asarray([labels[labels == label].size for label in range(1, ret)])
-    labels[labels != (sizes.argmax() + 1)] = 0  # set all not maximum components to background
-    labels[labels == (sizes.argmax() + 1)] = 1  # set the biggest components as foreground
-
-    # let's now fill the rest of the holes if any
-    labels = 1 - labels
-    ret, labels = cv2.connectedComponents(labels.astype(np.uint8))
-    sizes = np.asarray([labels[labels == label].size for label in range(1, ret)])
-    labels[labels != (sizes.argmax() + 1)] = 0
-    labels[labels == (sizes.argmax() + 1)] = 1
-    labels = 1 - labels
-
-    # for label in range(1, ret):
-    #     if labels[labels == label].size < 10000:
-    #         labels[labels == label] = 0
-
+    # removing external noise and internal holes with labelling
+    arch = fill_holes(arch.astype(np.int8))
+    arch = 1 - fill_holes(1 - arch)
 
     # compute skeleton
-    skel = compute_skeleton(labels)
-
+    skel = compute_skeleton(arch)
 
     # regression polynomial function
     coords = np.argwhere(skel > 0)
-    y = [y for y, x in coords]
-    x = [x for y, x in coords]
-    pol = np.polyfit(x, y, 12)
-    p = np.poly1d(pol)
+    y, x = list(coords[:, 0]), list(coords[:, 1])
+    try:
+        pol = np.polyfit(x, y, 8)
+        p = np.poly1d(pol)
+    except np.RankWarning:
+        pass
+
+    # DEBUG PREDICTED SPLINE
+    # original_rgb = np.tile(slice, (3, 1, 1))  # overlay on the original image (colorful)
+    # original_rgb = np.moveaxis(original_rgb, 0, -1)
+    # for sample in np.linspace(min(x), max(x), 1000):  # range(min(x), max(x)):
+    #     y_sample = p(sample)
+    #     try:
+    #         original_rgb[int(y_sample), int(sample), :] = (1, 0, 0)
+    #     except IndexError as e:
+    #         pass
+    # plt.imshow(original_rgb, cmap='gray')
+    # plt.savefig(folder)
+    # END DEBUG
 
     return p, min(x), max(x)
+
+
+def arch_stats(func, start, end):
+    x = start
+    counter = 0
+    delta = 0.3
+    peak = 100
+    while x < end:
+        y = func(x)
+        peak = peak if y > peak else y  # this is not a bug, peak value is the lowest
+        alfa = (func(x + delta / 2) - func(x - delta / 2)) / delta
+        x = x + 1 * np.sqrt(1 / (alfa ** 2 + 1))
+        counter = counter + 1
+    return counter, peak
+
+
+def paralines_mask(func, start, end, slice_dim, offset=50):
+    """
+    this functions uses the first order derivative of the function func to track the proper points (x,y) from start to end.
+    Args:
+        func (poly1d object): polynomial function approximation
+        end (float) starting value for the X axis
+        start (float) ending value for the X axis
+        offset (Int): offset for generating two more curves
+
+    Returns:
+        low_offset (numpy array): set of sets of xy coordinates (lower offset)
+        coords (numpy array): set of sets of xy coordinates
+        high_offset (numpy array): set of sets of xy coordinates (higer offset)
+        derivative: set of derivates foreach point of coords
+    """
+
+    d = 1
+    delta = 0.3
+    hx, hy = [], []
+    lx, ly = [], []
+    x = start + 1
+
+    while x < end:
+        y = func(x)
+        alfa = (func(x + delta / 2) - func(x - delta / 2)) / delta
+
+        # computing the shift trajectory
+        ort_alpha = -1 / alfa
+        cos = np.sqrt(1 / (ort_alpha ** 2 + 1))
+        sin = np.sqrt(ort_alpha ** 2 / (ort_alpha ** 2 + 1))
+        if ort_alpha > 0:
+            lx.append(x + offset * cos), ly.append(y + offset * sin)
+            hx.append(x - offset * cos), hy.append(y - offset * sin)
+        else:
+            lx.append(x - offset * cos), ly.append(y + offset * sin)
+            hx.append(x + offset * cos), hy.append(y - offset * sin)
+
+        x = x + d * np.sqrt(1 / (alfa ** 2 + 1))  # moving to the next x-axis val to check
+
+    H, W = slice_dim
+    hp = np.poly1d(np.polyfit(hx, hy, 6))
+    lp = np.poly1d(np.polyfit(lx, ly, 6))
+
+    mask = np.zeros((H, W))
+    start = max(int(hx[0]), 0)
+    end = min(int(hx[-1]), W - 1)
+    hy2 = [hp(x) for x in range(start, end)]
+    ly2 = [lp(x) for x in range(start, end)]
+
+    hy2 = np.clip(hy2, a_min=0, a_max=H - 1)
+    ly2 = np.clip(ly2, a_min=0, a_max=H - 1)
+    for idx in range(start, end):
+        mask[int(hy2[idx - start]):int(ly2[idx - start]), int(idx)] = 1
+
+    # mask = np.zeros((H, W))
+    # hy = [hp(x) for x in range(start_x, end_x)]
+    # ly = [lp(x) for x in range(start_x, end_x)]
+    #
+    # hy = np.clip(hy, a_min=0, a_max=H - 1)
+    # ly = np.clip(ly, a_min=0, a_max=H - 1)
+    # for idx in range(start_x, end_x):
+    #     mask[int(hy[idx - start_x]):int(ly[idx - start_x]), int(idx)] = 1
+
+    return mask.astype(np.bool)
 
 
 def arch_lines(func, start, end, offset=50):
@@ -233,61 +323,64 @@ def arch_lines(func, start, end, offset=50):
     return low_offset, coords, high_offset, derivative
 
 
-def background_suppression(data):
+def background_suppression(data, folder):
     """
-    detect the best spline from a set of 80 central slices of the volume,
+    detect the best spline from a set of 40 central slices of the volume,
     draw the parallel splines to select the most relevant zone of the volume
     suppress all the data out of this zone
     :param data:
     :return:
     """
+    import pathlib
+    save_dir = os.path.join(r'C:\Users\marco\Desktop\pre-processing-risultati\test_currently')
+    # pathlib.Path(os.path.join(folder)).mkdir(parents=True, exist_ok=True)
 
-    Z = data.shape[0]
+    slice_range = 40
+    step = 4
+    Z_center = data.shape[0] // 2
     best = 100
+    slice_id = Z_center
     setup = []
-    for i in range(Z // 2 - 20, Z // 2 + 20):
-        section = data[i]
-        p, start, end = arch_detection(section)
+    for i in range(Z_center - slice_range, Z_center + slice_range, step):
+        p, start, end = arch_detection(data[i], os.path.join(folder, '{}.png'.format(str(i))))
         mid = (start + end) // 2
-        new_start = start + np.argmax([p(i) for i in range(start, mid)])
-        new_end = mid + np.argmax([p(i) for i in range(mid, end)])
-        score = abs(p(new_start) - p(new_end))
-        if score < best:
-            best = score
-            setup = [p, new_start, new_end]
+        new_start = start + np.argmax([p(i) for i in range(start, mid)])  # removing possible noise at the beginning of the spline
+        new_end = mid + np.argmax([p(i) for i in range(mid, end)])  # same as above for the end of the spline
+        score = abs(p(new_start) - p(new_end))  # best spline starts and ends at the same level of depth
+        lenght, peak = arch_stats(p, new_start, new_end)
+        if new_start < 100 and new_end > data.shape[-1] - 100 and p(new_start) > data.shape[-2] - 200 and p(new_end) > data.shape[-2] - 200:
+            if score < best and lenght > 500 and peak < 80:
+                # print(f"this is a new best: {score}, {lenght}, {peak}")
+                best = score
+                slice_id = i
+                setup = [p, new_start, new_end]
 
-    low, _, high, _ = arch_lines(*setup, offset=70)
-    assert (len(low) == len(high))
+    if len(setup) == 0:
+        print(f"found patient {folder} where preprocessing was not feasible.")
+        return data
 
-    for i in range(len(low)):
-        # dealing with aliasing
-        lx1, ly1 = np.floor(low[i]).astype(int)
-        lx2, ly2 = np.ceil(low[i]).astype(int)
-        hx1, hy1 = np.floor(high[i]).astype(int)
-        hx2, hy2 = np.ceil(high[i]).astype(int)
+    f, start, end = setup
+    mask = paralines_mask(f, start, end, slice_dim=(data.shape[-2:]), offset=40)
+    # suppressing data below the lowest point in the spline
+    minimum = f(start) if f(start) > f(end) else f(end)
+    mask[int(minimum):, :] = False
 
-        # avoid coordinates overflow
-        hy1 = max(hy1, 0)
-        hy2 = max(hy2, 0)
-        ly1 = min(ly1, data.shape[1] - 1)
-        ly2 = min(ly2, data.shape[1] - 1)
-        if hx2 < 0 or hx1 < 0:
-            hx1 = hx2 = 0
-        elif hx2 >= data.shape[2] or hx1 >= data.shape[2]:
-            hx1 = hx2 = data.shape[2] - 1
+    data[:, np.bitwise_not(mask)] = 0  # using mask to suppress data
 
-        # suppressing raw data
-        data[:, ly1:, lx1] = 0
-        data[:, ly2:, lx2] = 0
-        data[:, :hy1, hx1] = 0
-        data[:, :hy2, hx2] = 0
+    # DEBUG: check the result
+    original_rgb = np.tile(data[slice_id], (3, 1, 1))  # overlay on the original image (colorful)
+    original_rgb = np.moveaxis(original_rgb, 0, -1)
+    original_rgb *= 255
+    for sample in np.linspace(start, end, 1000):  # range(min(x), max(x)):
+        y_sample = f(sample)
+        try:
+            original_rgb[int(y_sample), int(sample), :] = (255, 0, 0)
+        except IndexError as e:
+            pass
+    plt.imshow(original_rgb.astype(np.int))
+    plt.savefig(os.path.join(save_dir, '{}.png'.format(folder)))
+    # END DEBUG
 
-    # suppress areas out of the spline on the left using the first coord for the rest of the volume
-    data[:, min(int(low[-1][1]), data.shape[1] - 1):, min(int(low[-1][0]), data.shape[2] - 1):] = 0
-    data[:, :min(int(high[-1][1]), data.shape[1] - 1), min(int(high[-1][0]), data.shape[2] - 1):] = 0
-    # suppress areas out of the spline on the right using the coord coord for the rest of the volume
-    data[:, min(int(low[0][1]), data.shape[1] - 1):, :max(int(low[0][0]), 0)] = 0
-    data[:, :min(int(high[0][1]), data.shape[1] - 1), :max(int(high[0][0]), 0)] = 0
     return data
 
 
@@ -297,7 +390,6 @@ class SimpleDumper:
         self.title = exp_name
         self.project_dir = project_dir
 
-    def dump(self, volume, gt_volume, prediction, iteration):
-        np.save(os.path.join(self.project_dir, 'files', '{}_patient{}_data.npy'.format(self.title, iteration)), volume)
+    def dump(self, gt_volume, prediction, iteration):
         np.save(os.path.join(self.project_dir, 'files', '{}_patient{}_gt.npy'.format(self.title, iteration)), gt_volume)
         np.save(os.path.join(self.project_dir, 'files', '{}_patient{}_pred.npy'.format(self.title, iteration)), prediction)

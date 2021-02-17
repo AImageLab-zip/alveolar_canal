@@ -1,10 +1,10 @@
 tb_dir: 'Y:\work\runs'
-
+seed: 47
 # model configuration
 model:
-  # model class, supported values: UNet3D, RESNET18
-  name: RESNET18
-
+  # model class, supported values: UNet3D, RESNET18, RESNET50
+  name: UNet3D
+  sharding: 0
 # trainer configuration
 trainer:
   # path to the checkpoint directory
@@ -30,7 +30,6 @@ loss:
   # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss
   name:
     - BCEWithLogitsLoss
-    - DiceLoss
 
 lr_scheduler:
   # MultiStepLR, null, ...
@@ -48,7 +47,8 @@ data-loader:
   file_paths: 'Y:\work\datasets\maxillo\VOLUMES\'
 
   test_patients_id:
-    - 0
+    - 5
+    - 10
 
   # create arch line and set to zero all the values out of the arch
   background_suppression: True
@@ -62,17 +62,15 @@ data-loader:
   LCM_cut_factor: 32
 
   # scale the volume in percentage. factor value [0 - 1]
-  scale_factor: 0.8
+  scale_factor: 0.5
 
-  # average center of the volumes
-  cut_index: 0.514
-
-  labels:
-    UNLABELED: 3
-    BACKGROUND: 2
-    INSIDE: 1
-    CONTOUR: 0
 
 #  labels:
-#    BACKGROUND: 0
+#    UNLABELED: 3
+#    BACKGROUND: 2
 #    INSIDE: 1
+#    CONTOUR: 0
+
+  labels:
+    BACKGROUND: 0
+    INSIDE: 1

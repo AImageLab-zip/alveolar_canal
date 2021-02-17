@@ -1,17 +1,18 @@
-title: 'UNET'
+title: 'test_on_00'
 tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
-
+seed: 47
 # model configuration
 model:
-  # model class, supported values: UNet3D, RESNET18
+  # model class, supported values: UNet3D, RESNET18, RESNET50
   name: UNet3D
+  sharding: False
 
 # trainer configuration
 trainer:
   # path to the checkpoint directory
   checkpoint_path: null
   # skip train or do train?
-  do_train: false
+  do_train: true
   # how many iterations between validations
   validate_after_iters: 2
   # max number of epochs
@@ -36,11 +37,9 @@ loss:
 lr_scheduler:
   # MultiStepLR, null, ...
   name: null
-  # factor by which learning rate will be reduced
   factor: 0.1
   milestones:
-    - 35
-    - 90
+    - 150
 
 data-loader:
   # data loaders configuration
@@ -49,29 +48,30 @@ data-loader:
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
 
   test_patients_id:
-    - 0
+    - 10
+    - 20
 
   # create arch line and set to zero all the values out of the arch
   background_suppression: True
 
   augment_rate: 0
-  warm_up_length: 0.35
+  warm_up_length: 0
 
   # cut so that maxpool does not generate wrong skip features (8 for unet)
-  LCM_cut_factor: 32
+  LCM_cut_factor: 8
 
   # scale the volume in percentage. factor value [0 - 1]
-  scale_factor: 0.8
+  scale_factor: 1
 
   # average center of the volumes
   cut_index: 0.514
 
-  labels:
-    UNLABELED: 3
-    BACKGROUND: 2
-    INSIDE: 1
-    CONTOUR: 0
-
 #  labels:
-#    BACKGROUND: 0
+#    UNLABELED: 3
+#    BACKGROUND: 2
 #    INSIDE: 1
+#    CONTOUR: 0
+
+  labels:
+    BACKGROUND: 0
+    INSIDE: 1
