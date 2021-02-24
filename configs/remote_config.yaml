@@ -1,3 +1,5 @@
+# CONFIGURATION FOR REMOTE TESTS #
+
 title: 'test_on_00'
 tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
 seed: 47
@@ -12,7 +14,7 @@ trainer:
   # path to the checkpoint directory
   checkpoint_path: null
   # skip train or do train?
-  do_train: true
+  do_train: false
   # how many iterations between validations
   validate_after_iters: 2
   # max number of epochs
@@ -31,11 +33,10 @@ optimizer:
 loss:
   # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss
   name:
-    - BCEWithLogitsLoss
     - DiceLoss
 
 lr_scheduler:
-  # MultiStepLR, null, ...
+  # MultiStepLR, Plateau, null, ...
   name: null
   factor: 0.1
   milestones:
@@ -44,27 +45,18 @@ lr_scheduler:
 data-loader:
   # data loaders configuration
   batch_size: 1
-  num_workers: 0
+  num_workers: 8
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
 
-  test_patients_id:
-    - 10
-    - 20
-
   # create arch line and set to zero all the values out of the arch
-  background_suppression: True
+  background_suppression: False
 
   augment_rate: 0
   warm_up_length: 0
-
-  # cut so that maxpool does not generate wrong skip features (8 for unet)
-  LCM_cut_factor: 8
-
-  # scale the volume in percentage. factor value [0 - 1]
-  scale_factor: 1
-
-  # average center of the volumes
-  cut_index: 0.514
+  resize_shape:
+    - 80
+    - 128
+    - 144
 
 #  labels:
 #    UNLABELED: 3

@@ -22,9 +22,12 @@ class Eval:
         :param gt:
         :return:
         """
+        predition = predition[None, ...] if predition.ndim == 3 else predition
+        groundtruth = groundtruth[None, ...] if groundtruth.ndim == 3 else groundtruth
+
         excluded = ['BACKGROUND', 'UNLABELED']
         labels = [v for k, v in self.classes.items() if k not in excluded]  # exclude background from here
-        for batch_id in range(len(predition)):
+        for batch_id in range(predition.shape[0]):
             pred = predition[batch_id]
             gt = groundtruth[batch_id]
             c_score = []

@@ -3,6 +3,13 @@ from mayavi.core.ui.api import MlabSceneModel, SceneEditor
 from traits.api import HasTraits
 from traitsui.api import View, Item, HSplit, VSplit, VFold
 import numpy as np
+from matplotlib import pyplot as plt
+
+
+def simple_viewer(image):
+    plt.imshow(image, cmap='gray')
+    plt.show()
+
 
 COLORS = [
     (0.4, 0.9, 0.2), (0.8, 0.1, 0.2), (0.1, 0.1, 0.4),

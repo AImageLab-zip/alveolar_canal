@@ -1,3 +1,6 @@
+# CONFIGURATION FOR LOCAL TESTS #
+
+title: 'test'
 tb_dir: 'Y:\work\runs'
 seed: 47
 # model configuration
@@ -19,7 +22,7 @@ trainer:
 # optimizer configuration
 optimizer:
   # type of optimizer. if None, Adam is used by default. possible values: SGD, Adam, None
-  name: Adam
+  name: SGD
   # initial learning rate
   learning_rate: 0.0005
   # weight decay
@@ -29,11 +32,11 @@ optimizer:
 loss:
   # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss
   name:
-    - BCEWithLogitsLoss
+    - DiceLoss
 
 lr_scheduler:
-  # MultiStepLR, null, ...
-  name: null
+  # MultiStepLR, null, Plateau, ...
+  name: Plateau
   # factor by which learning rate will be reduced
   factor: 0.1
   milestones:
@@ -46,24 +49,16 @@ data-loader:
   num_workers: 0
   file_paths: 'Y:\work\datasets\maxillo\VOLUMES\'
 
-  test_patients_id:
-    - 5
-    - 10
-
   # create arch line and set to zero all the values out of the arch
-  background_suppression: True
+  background_suppression: False
+
+  resize_shape:
+    - 80
+    - 128
+    - 144
 
   # how many samples we have create from each sample in the original dataset?
   augment_rate: 0
-  # percentage before the warmup reach 1
-  warm_up_length: 0.35
-
-  # cut so that maxpool does not generate wrong skip features (8 for unet)
-  LCM_cut_factor: 32
-
-  # scale the volume in percentage. factor value [0 - 1]
-  scale_factor: 0.5
-
 
 #  labels:
 #    UNLABELED: 3

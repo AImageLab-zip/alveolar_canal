@@ -1,0 +1,36 @@
+# THIS YAML FILE IS WRITTEN TO BE LOADED AS A FRESH START FOR JOB_CREATOR #
+# IT HAS SOME BASIC FIELDS FOR THE REMOTE DEVELOPMENT NODES               #
+
+tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
+seed: 47
+model:
+  # model class, supported values: UNet3D, RESNET18, RESNET50
+  name: UNet3D
+lr_scheduler:
+  # MultiStepLR, Plateau, null, ...
+  name: null
+
+# loss function configuration
+loss:
+  # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss
+  name:
+    - DiceLoss
+
+optimizer:
+  # type of optimizer. if None, Adam is used by default. possible values: SGD, Adam, None
+  name: Adam
+  # initial learning rate
+  learning_rate: 0.0005
+
+# trainer configuration
+trainer:
+  # path to the checkpoint directory
+  checkpoint_path: null
+  # skip train or do train?
+  do_train: true
+  # how many iterations between validations
+  validate_after_iters: 2
+
+data-loader:
+  num_workers: 8
+  file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'

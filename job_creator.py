@@ -9,7 +9,7 @@ from functools import reduce
 from operator import getitem
 import yaml
 import re
-from datetime import date
+from datetime import datetime
 
 multi_labels = {
     'UNLABELED': 3,
@@ -21,11 +21,12 @@ binary_labels = {
     'BACKGROUND': 0,
     'INSIDE': 1
 }
+
 EXCELL_PATH = '/homes/mcipriano/sbatch_scripts/maxillo/3D/experiments.xlsx'
 SBATCH_OUTDIR = '/homes/mcipriano/sbatch_scripts/maxillo/3D/generated_sbatch.sh'
-SRUN_COMMAND = '$python -u /homes/mcipriano/projects/alveolar_canal_3Dtraining/main.py --experiment_name'
+SRUN_COMMAND = '$python -u /homes/mcipriano/projects/alveolar_canal_3Dtraining/main.py --base_config '
 
-EXCLUDED_COLUMNS = ['todo', 'num_labels', 'best_score', 'title', 'date', 'note']  # those excell values dont go to the yaml
+EXCLUDED_COLUMNS = ['todo', 'num_labels', 'best_score', 'title', 'date', 'note', 'test_patients_id']  # those excell values dont go to the yaml
 
 
 def set_nested_item(dataDict, mapList, val):
@@ -37,9 +38,9 @@ def set_nested_item(dataDict, mapList, val):
 if __name__ == '__main__':
 
     df = pd.read_excel(EXCELL_PATH)
-    config = utils.load_config_yaml(path.join('configs', 'remote_config.yaml'))  # load base config
+    config = utils.load_config_yaml(path.join('configs', 'base_config.yaml'))  # load base config
     titles = []
-
+    yaml_dirs = []
     for i, r in df[df.todo.eq(True)].iterrows():
         # creating an unique title and saving it for the sbatch file
         title = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(9))
@@ -60,7 +61,8 @@ if __name__ == '__main__':
 
         df.loc[i, 'todo'] = False
         df.loc[i, 'title'] = title
-        df.loc[i, 'date'] = date.today()
+        current_datetime = datetime.now()
+        df.loc[i, 'date'] = current_datetime.strftime('%x %X')
         # folders for this experiment
         project_dir = path.join('/nas/softechict-nas-2/mcipriano/results/maxillo/3D/', title)
         pathlib.Path(os.path.join(project_dir)).mkdir(parents=True, exist_ok=True)
@@ -69,8 +71,10 @@ if __name__ == '__main__':
         pathlib.Path(os.path.join(project_dir, 'files')).mkdir(parents=True, exist_ok=True)
         pathlib.Path(os.path.join(project_dir, 'numpy')).mkdir(parents=True, exist_ok=True)
         # saving the yaml dict as a file for this experiment
-        with open(os.path.join(project_dir, 'logs', 'config.yaml'), 'w') as file:
+        yaml_dir = os.path.join(project_dir, 'logs', 'config.yaml')
+        with open(yaml_dir, 'w') as file:
             yaml.dump(config, file)
+        yaml_dirs.append(yaml_dir)
 
     df.to_excel(EXCELL_PATH, index=False)
     file = open(os.path.join(SBATCH_OUTDIR), 'r')
@@ -80,13 +84,13 @@ if __name__ == '__main__':
     pos = sbatch.rfind('-eq') + 5
     start_id = int(re.findall(r'\d+', sbatch[pos:pos + 4])[0])
     next_id = start_id
-    for title in titles:
+    for yaml_dir in yaml_dirs:
         next_id = next_id + 1
-        sbatch += 'if [ "$SLURM_ARRAY_TASK_ID" -eq "{}" ]; then\n\t {} {}\nfi\n\n'.format(next_id, SRUN_COMMAND, title)
+        sbatch += 'if [ "$SLURM_ARRAY_TASK_ID" -eq "{}" ]; then\n\t {} {}\nfi\n\n'.format(next_id, SRUN_COMMAND, yaml_dir)
 
     for line in sbatch.splitlines():
         if line.startswith('#SBATCH --array='):
-            sbatch = sbatch.replace(line, '#SBATCH --array=[{}-{}]'.format(start_id + 1, next_id))
+            sbatch = sbatch.replace(line, '#SBATCH --array={}-{}'.format(start_id + 1, next_id))
             break
 
     file = open(os.path.join(SBATCH_OUTDIR), 'w')

@@ -15,6 +15,7 @@ from models.PadUNet3D import padUNet3D
 from models.ResidualEncoder import ResNetEncoder
 from models.ResNet50.ResNet50 import ResNet50
 import sys
+import pathlib
 
 
 def fix_dataset_folder(directory):
@@ -140,7 +141,7 @@ def fill_holes(img):
     return (labels == major_label).astype(np.int8)
 
 
-def arch_detection(slice, folder, debug=False):
+def arch_detection(slice):
     """
     compute a polynomial spline of the dental arch from a DICOM file
     Args:
@@ -188,7 +189,7 @@ def arch_detection(slice, folder, debug=False):
     #     except IndexError as e:
     #         pass
     # plt.imshow(original_rgb, cmap='gray')
-    # plt.savefig(folder)
+    # plt.show()
     # END DEBUG
 
     return p, min(x), max(x)
@@ -331,9 +332,6 @@ def background_suppression(data, folder):
     :param data:
     :return:
     """
-    import pathlib
-    save_dir = os.path.join(r'C:\Users\marco\Desktop\pre-processing-risultati\test_currently')
-    # pathlib.Path(os.path.join(folder)).mkdir(parents=True, exist_ok=True)
 
     slice_range = 40
     step = 4
@@ -342,7 +340,7 @@ def background_suppression(data, folder):
     slice_id = Z_center
     setup = []
     for i in range(Z_center - slice_range, Z_center + slice_range, step):
-        p, start, end = arch_detection(data[i], os.path.join(folder, '{}.png'.format(str(i))))
+        p, start, end = arch_detection(data[i])
         mid = (start + end) // 2
         new_start = start + np.argmax([p(i) for i in range(start, mid)])  # removing possible noise at the beginning of the spline
         new_end = mid + np.argmax([p(i) for i in range(mid, end)])  # same as above for the end of the spline
@@ -367,18 +365,19 @@ def background_suppression(data, folder):
 
     data[:, np.bitwise_not(mask)] = 0  # using mask to suppress data
 
-    # DEBUG: check the result
-    original_rgb = np.tile(data[slice_id], (3, 1, 1))  # overlay on the original image (colorful)
-    original_rgb = np.moveaxis(original_rgb, 0, -1)
-    original_rgb *= 255
-    for sample in np.linspace(start, end, 1000):  # range(min(x), max(x)):
-        y_sample = f(sample)
-        try:
-            original_rgb[int(y_sample), int(sample), :] = (255, 0, 0)
-        except IndexError as e:
-            pass
-    plt.imshow(original_rgb.astype(np.int))
-    plt.savefig(os.path.join(save_dir, '{}.png'.format(folder)))
+    # # DEBUG: check the result
+    # save_dir = os.path.join(r'C:\Users\marco\Desktop\pre-processing-risultati\test_currently')
+    # original_rgb = np.tile(data[slice_id], (3, 1, 1))  # overlay on the original image (colorful)
+    # original_rgb = np.moveaxis(original_rgb, 0, -1)
+    # original_rgb *= 255
+    # for sample in np.linspace(start, end, 1000):  # range(min(x), max(x)):
+    #     y_sample = f(sample)
+    #     try:
+    #         original_rgb[int(y_sample), int(sample), :] = (255, 0, 0)
+    #     except IndexError as e:
+    #         pass
+    # plt.imshow(original_rgb.astype(np.int))
+    # plt.savefig(os.path.join(save_dir, '{}.png'.format(folder)))
     # END DEBUG
 
     return data
@@ -390,6 +389,9 @@ class SimpleDumper:
         self.title = exp_name
         self.project_dir = project_dir
 
-    def dump(self, gt_volume, prediction, iteration):
-        np.save(os.path.join(self.project_dir, 'files', '{}_patient{}_gt.npy'.format(self.title, iteration)), gt_volume)
-        np.save(os.path.join(self.project_dir, 'files', '{}_patient{}_pred.npy'.format(self.title, iteration)), prediction)
+    def dump(self, gt_volume, prediction, images, iteration):
+        save_dir = os.path.join(self.project_dir, 'numpy', f'{iteration}')
+        pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True)
+        np.save(os.path.join(save_dir, 'gt.npy'), gt_volume)
+        np.save(os.path.join(save_dir, 'pred.npy'), prediction)
+        np.save(os.path.join(save_dir, 'input.npy'), images)

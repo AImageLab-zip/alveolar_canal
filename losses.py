@@ -12,28 +12,15 @@ class DiceLoss(nn.Module):
         self.device = device
 
     def forward(self, pred, gt):
-        c_score = []
-        # excluded = [v for k, v in self.classes.items() if k in ['BACKGROUND', 'UNLABELED']]
-        # for e in excluded:
-        #     TODO: escludi da gt e pred le coords dove ci sono quelle classi
+        included = torch.Tensor([k not in ['BACKGROUND', 'UNLABELED'] for k, v in self.classes.items()]).bool()
 
         gt_onehot = one_hot_encode(gt, pred.shape, self.device).permute(0, 4, 1, 2, 3)
         input_soft = F.softmax(pred, dim=1)
-        # compute the actual dice score
-        dims = (1, 2, 3, 4)
+        dims = (2, 3, 4)
         intersection = torch.sum(input_soft * gt_onehot, dims)
         cardinality = torch.sum(input_soft + gt_onehot, dims)
         dice_score = 2. * intersection / (cardinality + self.eps)
-        return 1. - dice_score
-
-        # intersection = torch.sum(pred[gt == c] == c)
-        # dice_union = torch.sum(torch.where(pred == c, 1, 0)) +  torch.sum(torch.where(gt == c, 1, 0))
-        #
-        # # gt_class_idx = np.argwhere(gt.flatten() == c)
-        # # intersection = np.sum(pred.flatten()[gt_class_idx] == c)
-        # # dice_union = np.argwhere(gt.flatten() == c).size + np.argwhere(pred.flatten() == c).size
-        # c_score.append(1 - (2 * intersection + self.eps) / (dice_union + self.eps))
-        # return sum(c_score) / len(labels)
+        return torch.mean(1. - dice_score[:, included])
 
 
 def one_hot_encode(volume, shape, device):
@@ -89,14 +76,14 @@ class LossFn:
         :param gt:
         :return:
         """
-        assert pred[0].device == gt[0].device
-        assert gt[0].device != 'cpu'
-        self.device = pred[0].device
+        assert pred.device == gt.device
+        assert gt.device != 'cpu'
+        self.device = pred.device
 
         cur_loss = []
         for name in self.name:
-            batch_loss = []
-            for batch_id in range(len(pred)):
-                batch_loss.append(self.factory_loss(pred[batch_id], gt[batch_id], name, warmup))
-            cur_loss.append(sum(batch_loss) / len(batch_loss))
-        return cur_loss
+            loss = self.factory_loss(pred, gt, name, warmup)
+            if torch.isnan(loss):
+                raise ValueError('Loss is nan during training...')
+            cur_loss.append(loss)
+        return torch.sum(torch.stack(cur_loss))

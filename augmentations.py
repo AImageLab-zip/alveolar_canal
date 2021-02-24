@@ -189,22 +189,30 @@ class Normalize:
 
 
 class Rescale:
-    def __init__(self, scale_factor, labels, **kwargs):
+    def __init__(self, scale_factor=None, size=None, interp_fn='trilinear', **kwargs):
+        assert (scale_factor is not None) ^ (size is not None), "please specify a size OR a factor"
         self.scale_factor = scale_factor
-        self.labels = labels
+        self.size = size
+        self.interp_fn = interp_fn
 
     def __call__(self, data):
 
         if self.scale_factor == 1:
             return data
 
-        image = ToTensor()(data)
+        tensor_flag = torch.is_tensor(data)
+        image = ToTensor()(data) if not tensor_flag else data
+
         assert image.ndim == 3
 
         image = image.unsqueeze(0).unsqueeze(0)
-        image = interpolate(image, scale_factor=self.scale_factor, mode='trilinear', align_corners=False, recompute_scale_factor=False).squeeze()
+        image = interpolate(
+            image, size=self.size, scale_factor=self.scale_factor, mode=self.interp_fn, recompute_scale_factor=False
+        ).squeeze()
 
-        return image.numpy()
+        if not tensor_flag:
+            return image.numpy()
+        return image
 
 
 class Resize:
@@ -286,3 +294,52 @@ class Relabel:
         _, unique_labels = np.unique(m, return_inverse=True)
         m = unique_labels.reshape(m.shape)
         return m
+
+
+class CenterPad:
+    def __init__(self, final_shape):
+        self.size = final_shape
+
+    def __call__(self, image, pad_val=None):
+
+        if pad_val is None:
+            pad_val = image.min()
+
+        tensor_flag = torch.is_tensor(image)
+        image = ToTensor()(image) if not tensor_flag else image
+
+        z_offset = self.size[0] - image.shape[-3]
+        y_offset = self.size[1] - image.shape[-2]
+        x_offset = self.size[2] - image.shape[-1]
+
+        z_offset = int(np.floor(z_offset / 2.)), int(np.ceil(z_offset / 2.))
+        y_offset = int(np.floor(y_offset / 2.)), int(np.ceil(y_offset / 2.))
+        x_offset = int(np.floor(x_offset / 2.)), int(np.ceil(x_offset / 2.))
+
+        padded = torch.nn.functional.pad(image, [x_offset[0], x_offset[1], y_offset[0], y_offset[1], z_offset[0], z_offset[1]], value=pad_val)
+
+        if not tensor_flag:
+            return padded.numpy()
+        return padded
+
+
+class CenterCrop:
+
+    def __init__(self, target_shape):
+        self.target_shape = target_shape
+
+    def __call__(self, image, gt=None):
+
+        z_offset = image.shape[-3] - self.target_shape[0]
+        y_offset = image.shape[-2] - self.target_shape[1]
+        x_offset = image.shape[-1] - self.target_shape[2]
+        z_offset = int(np.floor(z_offset / 2.)), image.shape[-3] - int(np.ceil(z_offset / 2.))
+        y_offset = int(np.floor(y_offset / 2.)), image.shape[-2] - int(np.ceil(y_offset / 2.))
+        x_offset = int(np.floor(x_offset / 2.)), image.shape[-1] - int(np.ceil(x_offset / 2.))
+
+        crop_img = image[..., z_offset[0]:z_offset[1], y_offset[0]:y_offset[1], x_offset[0]:x_offset[1]]
+        if gt is not None:
+            assert image.shape == gt.shape
+            gt = gt[..., z_offset[0]:z_offset[1], y_offset[0]:y_offset[1], x_offset[0]:x_offset[1]]
+            return crop_img, gt
+        return crop_img
