@@ -19,6 +19,10 @@ import numpy as np
 from os import path
 import socket
 
+in_channels = {
+    'Multiscale': 3,
+    'UNet3D': 1
+}
 
 def main(experiment_name):
 
@@ -67,19 +71,20 @@ def main(experiment_name):
             gamma=sched_config['factor'],
         )
     elif scheduler_name == 'Plateau':
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', verbose=True, patience=7)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', verbose=True, patience=7)
     else:
         scheduler = None
 
     evaluator = Evaluator(loader_config)
 
-    alveolar_data = AlveolarDataloader(config=loader_config)
+    alveolar_data = AlveolarDataloader(config=loader_config, in_ch=in_channels[model_config['name']])
     train_id, test_id, val_id = alveolar_data.split_dataset()
 
     train_loader = data.DataLoader(
         alveolar_data,
         batch_size=loader_config['batch_size'],
-        sampler=SubsetRandomSampler(train_id),
+        # sampler=SubsetRandomSampler(train_id),
+        sampler=train_id,
         num_workers=loader_config['num_workers'],
         pin_memory=True,
         drop_last=True,
@@ -116,7 +121,8 @@ def main(experiment_name):
             logging.info("No checkpoint exists from '{}'. Skipping...".format(train_config['checkpoint_path']))
 
     writer = SummaryWriter(log_dir=os.path.join(config['tb_dir'], experiment_name), purge_step=current_epoch)
-    vol_writer = utils.SimpleDumper(loader_config, experiment_name, project_dir)
+    vol_writer = utils.SimpleDumper(loader_config, experiment_name, project_dir) if config.get('dump_results', False) else None
+
 
     if train_config['do_train']:
         best_metric = 0
@@ -128,7 +134,7 @@ def main(experiment_name):
 
         for epoch in range(current_epoch, train_config['epochs']):
 
-            train(model, train_loader, loss, optimizer, epoch, writer, evaluator, warm_up[epoch])
+            epoch_loss, _ = train(model, train_loader, loss, optimizer, epoch, writer, evaluator, warm_up[epoch])
 
             val_metric = test(model, val_loader, loss, epoch, evaluator, warm_up[epoch])
             writer.add_scalar('Metric/validation', val_metric, epoch)
@@ -136,7 +142,7 @@ def main(experiment_name):
 
             if scheduler is not None:
                 if optim_name == 'SGD' and scheduler_name == 'Plateau':
-                    scheduler.step(val_metric)
+                    scheduler.step(epoch_loss)
                 else:
                     scheduler.step(current_epoch)
 
@@ -155,6 +161,7 @@ def main(experiment_name):
                     'epoch': epoch,
                     'state_dict': model.state_dict(),
                     'optimizer': optimizer.state_dict(),
+                    'metric': val_metric
                 }
 
                 torch.save(
@@ -178,7 +185,7 @@ if __name__ == '__main__':
     # utils.fix_dataset_folder(r'Y:\work\datasets\maxillo\VOLUMES')
 
     RESULTS_DIR = r'Y:\work\results' if socket.gethostname() == 'DESKTOP-I67J6KK' else r'/nas/softechict-nas-2/mcipriano/results/maxillo/3D'
-    BASE_YAML_PATH = os.path.join('configs', 'configs.yaml') if socket.gethostname() == 'DESKTOP-I67J6KK' else os.path.join('configs', 'remote_config.yaml')
+    BASE_YAML_PATH = os.path.join('configs', 'config.yaml') if socket.gethostname() == 'DESKTOP-I67J6KK' else os.path.join('configs', 'remote_config.yaml')
 
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('--base_config', default="config.yaml", help='path to the yaml config file')

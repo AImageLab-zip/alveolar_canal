@@ -503,5 +503,5 @@ class Jaw:
                 annotations.append(self.get_gt_slice(slice_num))
             return np.stack(annotations).astype(np.uint8)
         except:
-            print("INFO: NO ANNOTATION FOUND IN THIS VOLUME! BLACK MASK RETURNED")
+            # print("INFO: NO ANNOTATION FOUND IN THIS VOLUME! BLACK MASK RETURNED")
             return np.zeros_like(self.volume)

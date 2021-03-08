@@ -11,15 +11,15 @@ from Jaw import Jaw
 import logging
 
 MAXILLO_DICOM_MAX = 64535
-DATASET_MU = 0.453
-DATASET_STD = 0.162
 
 
 class AlveolarDataloader(Dataset):
 
-    def __init__(self, config):
+    def __init__(self, config, in_ch=1):
 
         self.config = config
+        self.in_ch = in_ch
+
         self.patients = {
             'data': [],
             'gt': []
@@ -30,12 +30,15 @@ class AlveolarDataloader(Dataset):
             'val': []
         }
 
-        self.LCM = self.config.get('LCM_cut_factor', 1)
-        self.cut_idx = config.get('cut_index', 0.5)
+        self.augmentation = transforms.Compose([
+            RandomRotate(execution_probability=0.5, order=4),
+            RandomVerticalFlip(execution_probability=0.7),
+            RandomContrast(execution_probability=0.5),
+            # ElasticDeformation(execution_probability=0.2),
+        ])
 
-        # test_ids = self.config.get('test_patients_id', [0, 1])
-        # if not isinstance(test_ids, list):
-        #     test_ids = [test_ids]
+        reshape_size = self.config.get('resize_shape', (152, 224, 256))
+        self.reshape_size = tuple(reshape_size) if type(reshape_size) == list else reshape_size
 
         gt_filename = 'gt_4labels.npy' if len(self.config['labels']) > 2 else 'gt_2labels.npy'
         index = 0
@@ -46,10 +49,11 @@ class AlveolarDataloader(Dataset):
         np.random.shuffle(patients_ids)
         test_ids = patients_ids[:int(tot_patients * 0.2)]
         val_ids = patients_ids[int(tot_patients * 0.2):int(tot_patients * 0.3)]
-
         for patient_num, folder in tqdm(enumerate(patients), total=len(os.listdir(config['file_paths']))):
-            # data = np.load(os.path.join(config['file_paths'], folder, 'data.npy'))
-            data = Jaw(os.path.join(config['file_paths'], folder, 'DICOM', 'DICOMDIR')).get_volume()
+            if config.get('use_dicom', False):
+                data = Jaw(os.path.join(config['file_paths'], folder, 'DICOM', 'DICOMDIR')).get_volume()
+            else:
+                data = np.load(os.path.join(config['file_paths'], folder, 'data.npy'))
             gt = np.load(os.path.join(config['file_paths'], folder, gt_filename))
 
             assert data.max() <= MAXILLO_DICOM_MAX  # maximum values of those dicom
@@ -70,11 +74,18 @@ class AlveolarDataloader(Dataset):
             self.indices[partition] += [index, index + 1]
             index = index + 2
 
+        self.mean = self.config.get('mean', np.mean(self.patients['data']))
+        self.std = self.config.get('std', np.std(self.patients['data']))
+        print(f'mean for the dataset: {self.mean}, std: {self.std}')
+
         self.indices['train'] = np.asarray(self.indices['train'])
         self.indices['test'] = np.asarray(self.indices['test'])
         self.indices['val'] = np.asarray(self.indices['val'])
 
-        self.weights = self.median_frequency_balancing()
+        self.weights = self.config.get('weights', self.median_frequency_balancing())
+        if not torch.is_tensor(self.weights):
+            self.weights = torch.Tensor(self.weights)
+        print(f'weights for this dataset: {self.weights}')
 
     def __len__(self):
         return self.indices['train'].size + self.indices['test'].size + self.indices['val'].size
@@ -89,10 +100,7 @@ class AlveolarDataloader(Dataset):
 
         Z, H, W = data.shape[-3:]
 
-        reshape_size = self.config.get('resize_shape', (152, 224, 256))
-        reshape_size = tuple(reshape_size) if type(reshape_size) == list else reshape_size
-
-        ratio = reshape_size[1]/reshape_size[2]
+        ratio = self.reshape_size[1]/self.reshape_size[2]
         new_shape = (Z, H, H // ratio) if H / W > ratio else (Z, W * ratio, W)
         data = CenterPad(new_shape)(data)
 
@@ -106,12 +114,11 @@ class AlveolarDataloader(Dataset):
         #     if partition == 'train':
         #         gt = gt[min(xs):max(xs) + 1, min(ys):max(ys) + 1, min(zs):max(zs) + 1]
 
-        # rescaling
-        data = Rescale(size=reshape_size)(data)
+        data = Rescale(size=self.reshape_size)(data)
 
         if partition == 'train':
             gt = CenterPad(new_shape)(gt)
-            gt = Rescale(size=reshape_size, interp_fn='nearest')(gt)
+            gt = Rescale(size=self.reshape_size, interp_fn='nearest')(gt)
 
         # split the jawbone in two pieces
         left, right = np.split(data, [int(0.5 * data.shape[2])], axis=2)
@@ -120,28 +127,14 @@ class AlveolarDataloader(Dataset):
 
         return left, gleft, right, gright,
 
-    def augment_dataset(self):
-        augmentation = transforms.Compose([
-            RandomRotate(execution_probability=0.8),
-            RandomVerticalFlip(execution_probability=0.7),
-            RandomContrast(execution_probability=0.7),
-            ElasticDeformation(execution_probability=0.8),
-        ])
-
-        augment_rate = self.config.get('augment_rate', 0)
-        for idx in self.indices['train']:
-            vol, gt = self.patients['data'][idx], self.patients['gt'][idx]
-            for i in range(augment_rate):
-                aug_vol, aug_gt = augmentation([vol, gt])
-                self.patients['data'].append(aug_vol)
-                self.patients['gt'].append(aug_gt)
-
-        return augment_rate * len(self.indices['train'])
-
     def __getitem__(self, index):
         vol, gt = self.patients['data'][index].astype(np.float32), self.patients['gt'][index].astype(np.int64)
-        vol = transforms.Normalize(DATASET_MU, DATASET_STD)(ToTensor()(vol))
-        gt = ToTensor()(gt)
+        if index in self.indices['train']:
+            vol, gt = self.augmentation([vol, gt])
+            assert np.array_equal(gt, gt.astype(bool)), 'something wrong with augmentations here'
+        vol = transforms.Normalize(self.mean, self.std)(ToTensor()(vol.copy()))
+        gt = ToTensor()(gt.copy())
+        vol = vol.unsqueeze(0).repeat(self.in_ch, 1, 1, 1)  # creating the channel axis and making it RGB if needed
         return vol, gt
 
     def split_dataset(self):
@@ -149,10 +142,6 @@ class AlveolarDataloader(Dataset):
         num_patient = len(self.patients['data'])
         if num_patient < 2:
             raise Exception('less available patients than the ones required for training validate and test!')
-
-        tot_new = self.augment_dataset()
-        augmented_idx = np.arange(num_patient, num_patient + tot_new)
-        self.indices['train'] = np.concatenate((self.indices['train'], augmented_idx))
 
         np.random.shuffle(self.indices['train'])
 

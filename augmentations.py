@@ -116,7 +116,7 @@ class RandomRotate:
             # assert image.shape == mask.shape
             assert image.ndim == 3
             image = rotate(image, angle, axes=(0, 2), reshape=False, order=self.order, mode=self.mode)
-            mask = rotate(mask, angle, axes=(0, 2), reshape=False, order=self.order, mode=self.mode)
+            mask = rotate(mask, angle, axes=(0, 2), reshape=False, order=0, mode=self.mode)
             return [image, mask]
         return data
 
@@ -129,7 +129,7 @@ class ElasticDeformation:
     Based on: https://github.com/fcalvet/image_tools/blob/master/image_augmentation.py#L62
     """
 
-    def __init__(self, spline_order=2, alpha=100, sigma=30, execution_probability=0.1,
+    def __init__(self, spline_order=2, alpha=1, sigma=5, execution_probability=0.1,
                  **kwargs):
         """
         :param spline_order: the order of spline interpolation (use 0 for labeled images)
@@ -166,8 +166,8 @@ class ElasticDeformation:
             # assert image.shape == mask.shape
             assert image.ndim == 3
 
-            image = self.deformate(image, self.spline_order)
-            mask = self.deformate(mask, 0)
+            image = self.deformate(image.copy(), self.spline_order)
+            mask = self.deformate(mask.copy(), 0)
             return [image, mask]
         return data
 

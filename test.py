@@ -1,8 +1,7 @@
 import torch
-import numpy as np
+from torch import nn
 from tqdm import tqdm
 from torch.nn.functional import interpolate
-from torch.cuda.amp import autocast
 from augmentations import CenterCrop
 
 
@@ -30,11 +29,18 @@ def test(model, test_loader,  loss_fn, epoch, evaluator, warmup, dumper=None):
             output = interpolate(output.unsqueeze(0), size=(new_shape), mode='trilinear', align_corners=False).squeeze()
             output = CenterCrop((Z, H, W))(output)
 
-            images = interpolate(images.view(1, 1, *images.shape), size=(new_shape), mode='trilinear', align_corners=False).squeeze()
+            images = interpolate(images.view(1, *images.shape), size=(new_shape), mode='trilinear', align_corners=False).squeeze()
             images = CenterCrop((Z, H, W))(images)
 
             # final predictions
-            output = torch.argmax(torch.nn.Softmax(dim=0)(output), dim=0).cpu().numpy()
+            if output.ndim == 4 and output.shape[0] > 1:
+                output = torch.argmax(torch.nn.Softmax(dim=0)(output), dim=0).cpu().numpy()
+            else:
+                output = nn.Sigmoid()(output)
+                output[output > .5] = 1
+                output[output != 1] = 0
+                output = output.squeeze().cpu().detach().numpy()
+
             labels = labels.cpu().numpy()
             images = images.cpu().numpy()
 
@@ -43,6 +49,7 @@ def test(model, test_loader,  loss_fn, epoch, evaluator, warmup, dumper=None):
             if dumper is not None:
                 dumper.dump(labels, output, images, i)
 
+    print(evaluator.metric_list)
     epoch_val_metric = evaluator.mean_metric()
 
     return epoch_val_metric

@@ -35,13 +35,12 @@ class padUNet3D(nn.Module):
     def conv3Dblock(self, in_channels, out_channels, kernel_size=(3, 3, 3), stride=1, padding=(1, 1, 1)):
         return nn.Sequential(
                 nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding),
-                nn.BatchNorm3d(out_channels),
+                nn.BatchNorm3d(out_channels, momentum=0.001),
                 nn.ReLU()
         )
 
     def forward(self, x):
-        if x.ndim == 4:
-            x = torch.unsqueeze(x, dim=1)  # add single channel after batchsize
+
 
         h = self.ec0(x)
         feat_0 = self.ec1(h)

@@ -14,21 +14,28 @@ from models.PadUNet3Dmulti_2 import padUNet3DMulti
 from models.PadUNet3D import padUNet3D
 from models.ResidualEncoder import ResNetEncoder
 from models.ResNet50.ResNet50 import ResNet50
+from models.Multiscale.Multiscale import Multiscale3D
 import sys
 import pathlib
+from Jaw import Jaw
 
 
 def fix_dataset_folder(directory):
-    final_files = ['data.npy', 'gt_2labels.npy', 'gt_4labels.npy']
+    final_files = ['data.npy', 'DICOM', 'gt_2labels.npy', 'gt_4labels.npy']
     for folder in listdir(directory):
         files = os.listdir(os.path.join(directory, folder))
+        assert 'DICOM' in files, 'dicom folder not found'
+
         if all(file in final_files for file in files):  # this folder is okay
             continue
 
+        # better file format (from DICOM LUT)
+        data = Jaw(os.path.join(directory, folder, 'DICOM', 'DICOMDIR')).get_volume()
         four_labels = np.load(os.path.join(directory, folder, 'gt_volume.npy'))
         two_labels = convert_to_two_labels(four_labels)
 
-        os.rename(os.path.join(directory, folder, 'volume.npy'), os.path.join(directory, folder, 'data.npy'))
+        np.save(os.path.join(directory, folder, 'data.npy'), data)
+        os.remove(os.path.join(directory, folder, 'volume.npy'))  # remove old useless volume
         os.rename(os.path.join(directory, folder, 'gt_volume.npy'), os.path.join(directory, folder, 'gt_4labels.npy'))
         np.save(os.path.join(directory, folder, 'gt_2labels.npy'), two_labels)
 
@@ -97,10 +104,13 @@ def load_config_yaml(config_file):
 
 
 def load_model(model_config, num_classes):
-    if model_config['name'] == 'UNet3D':
+    name = model_config.get('name', 'UNet3D')
+    if name == 'UNet3D':
         if model_config.get('sharding', False):
             return padUNet3DMulti(num_classes)
         return padUNet3D(n_classes=num_classes)
+    elif name == 'Multiscale':
+        return Multiscale3D(num_classes=num_classes)
     elif model_config['name'] == 'RESNET18':
         return ResNetEncoder(n_classes=num_classes)
     elif model_config['name'] == 'RESNET50':
@@ -395,3 +405,7 @@ class SimpleDumper:
         np.save(os.path.join(save_dir, 'gt.npy'), gt_volume)
         np.save(os.path.join(save_dir, 'pred.npy'), prediction)
         np.save(os.path.join(save_dir, 'input.npy'), images)
+
+
+if __name__ == '__main__':
+    fix_dataset_folder(r'Y:\work\datasets\maxillo\nuovi')

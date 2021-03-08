@@ -5,15 +5,15 @@ tb_dir: 'Y:\work\runs'
 seed: 47
 # model configuration
 model:
-  # model class, supported values: UNet3D, RESNET18, RESNET50
-  name: UNet3D
+  # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale
+  name: Multiscale
   sharding: 0
 # trainer configuration
 trainer:
   # path to the checkpoint directory
   checkpoint_path: null
   # skip train or do train?
-  do_train: true
+  do_train: false
   # how many iterations between validations
   validate_after_iters: 2
   # max number of epochs
@@ -53,9 +53,15 @@ data-loader:
   background_suppression: False
 
   resize_shape:
-    - 80
-    - 128
+    - 92
     - 144
+    - 144
+    -
+    mean: 0.4276
+    std: 0.1615
+    weights:
+      - 7.0382e-04
+      - 9.9930e-01
 
   # how many samples we have create from each sample in the original dataset?
   augment_rate: 0

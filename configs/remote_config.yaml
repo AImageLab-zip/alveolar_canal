@@ -5,8 +5,8 @@ tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
 seed: 47
 # model configuration
 model:
-  # model class, supported values: UNet3D, RESNET18, RESNET50
-  name: UNet3D
+  # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale
+  name: Multiscale
   sharding: False
 
 # trainer configuration
@@ -14,7 +14,7 @@ trainer:
   # path to the checkpoint directory
   checkpoint_path: null
   # skip train or do train?
-  do_train: false
+  do_train: False
   # how many iterations between validations
   validate_after_iters: 2
   # max number of epochs
@@ -23,40 +23,44 @@ trainer:
 # optimizer configuration
 optimizer:
   # type of optimizer. if None, Adam is used by default. possible values: SGD, Adam, None
-  name: Adam
+  name: SGD
   # initial learning rate
-  learning_rate: 0.0005
+  learning_rate: 0.1
   # weight decay
   weight_decay: 0
 
 # loss function configuration
 loss:
-  # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss
+  # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss, Jaccard
   name:
     - DiceLoss
 
 lr_scheduler:
   # MultiStepLR, Plateau, null, ...
-  name: null
-  factor: 0.1
-  milestones:
-    - 150
+  name: Plateau
+
 
 data-loader:
   # data loaders configuration
-  batch_size: 1
-  num_workers: 8
+  batch_size: 2
+  num_workers: 0
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
 
   # create arch line and set to zero all the values out of the arch
   background_suppression: False
+  mean: 0.4276
+  std: 0.1615
+  weights:
+    - 7.0382e-04
+    - 9.9930e-01
 
-  augment_rate: 0
   warm_up_length: 0
+
+  # KEEP IN MIND: SCALE RATION W-H SHOULD BE AROUND 0.87, Z about 0.5 of H
   resize_shape:
-    - 80
-    - 128
-    - 144
+    - 100
+    - 192
+    - 224
 
 #  labels:
 #    UNLABELED: 3
