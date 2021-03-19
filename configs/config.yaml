@@ -1,19 +1,19 @@
 # CONFIGURATION FOR LOCAL TESTS #
-
 title: 'test'
 tb_dir: 'Y:\work\runs'
 seed: 47
 # model configuration
 model:
   # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale
-  name: Multiscale
-  sharding: 0
+  name: UNet3D
+  sharding: False
+
 # trainer configuration
 trainer:
   # path to the checkpoint directory
   checkpoint_path: null
   # skip train or do train?
-  do_train: false
+  do_train: True
   # how many iterations between validations
   validate_after_iters: 2
   # max number of epochs
@@ -24,24 +24,20 @@ optimizer:
   # type of optimizer. if None, Adam is used by default. possible values: SGD, Adam, None
   name: SGD
   # initial learning rate
-  learning_rate: 0.0005
+  learning_rate: 0.1
   # weight decay
   weight_decay: 0
 
 # loss function configuration
 loss:
-  # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss
+  # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss, Jaccard
   name:
-    - DiceLoss
+    - Jaccard
 
 lr_scheduler:
-  # MultiStepLR, null, Plateau, ...
+  # MultiStepLR, Plateau, null, ...
   name: Plateau
-  # factor by which learning rate will be reduced
-  factor: 0.1
-  milestones:
-    - 35
-    - 90
+
 
 data-loader:
   # data loaders configuration
@@ -51,20 +47,19 @@ data-loader:
 
   # create arch line and set to zero all the values out of the arch
   background_suppression: False
+  mean: 0.4276
+  std: 0.1615
+  weights:
+    - 7.03e-04
+    - 9.99e-01
 
+  warm_up_length: 0
+
+  # KEEP IN MIND: SCALE RATIOS SHOULD BE AROUND (0.4568, 0.8733, 1)
   resize_shape:
-    - 92
+    - 64
+    - 128
     - 144
-    - 144
-    -
-    mean: 0.4276
-    std: 0.1615
-    weights:
-      - 7.0382e-04
-      - 9.9930e-01
-
-  # how many samples we have create from each sample in the original dataset?
-  augment_rate: 0
 
 #  labels:
 #    UNLABELED: 3
@@ -75,3 +70,8 @@ data-loader:
   labels:
     BACKGROUND: 0
     INSIDE: 1
+
+  split_volumes:
+    - 1
+    - 1
+    - 2

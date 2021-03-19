@@ -4,12 +4,24 @@ output:
   side_cuts: true
 
 directories:
-    gt: 'C:\Users\marco\Desktop\test\volumi\133_gt.npy'
-    dicom: 'Y:\work\datasets\maxillo\DICOM\P133\DICOMDIR'
-    net_weights: 'C:\Users\marco\Desktop\test\best.pth'
+  test_folders:
+    - P102
+    - P114
+    - P119
+    - P139
+    - P23
+    - P30
+    - P32
+    - P33
+    - P37
+    - P38
+    - P53
+    - P88
+    - P90
+    - P94
+    - P97
+  dataset_folder: 'Y:\work\datasets\maxillo\VOLUMES'
+  data_folder: 'C:\Users\marco\Desktop\numpy'
 
 experiment:
-    preprocessing: false
-    scale: 0.5
-    network: 'UNet3D'
-    patient: 188  # this is used to make a custom folder in the tests dir
+    title: 'SKXUGF5VQ'

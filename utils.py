@@ -18,6 +18,32 @@ from models.Multiscale.Multiscale import Multiscale3D
 import sys
 import pathlib
 from Jaw import Jaw
+import torch
+import zipfile
+import json
+
+
+def create_split(dataset_path):
+    folder_debug = {'train': [], 'test': [], 'val': []}
+    patients = os.listdir(dataset_path)
+    tot_patients = len(patients)
+    patients_ids = np.arange(tot_patients)
+    np.random.shuffle(patients_ids)
+    test_ids = patients_ids[:int(tot_patients * 0.2)]
+    val_ids = patients_ids[int(tot_patients * 0.2):int(tot_patients * 0.3)]
+
+    for patient_num, folder in (enumerate(patients)):
+        partition = 'train'
+        if patient_num in test_ids:
+            partition = 'test'
+        elif patient_num in val_ids:
+            partition = 'val'
+        folder_debug[partition].append(folder)
+
+    json = json.dumps(folder_debug)
+    f = open("configs/splits.json", "w")
+    f.write(json)
+    f.close()
 
 
 def fix_dataset_folder(directory):
@@ -393,18 +419,63 @@ def background_suppression(data, folder):
     return data
 
 
+class Splitter:
+    def __init__(self, split):
+        self.nz, self.nh, self.nw = split
+        self.batch_size = self.nz * self.nh * self.nw
+
+    def split(self, data):
+        splits = []
+        for wsub in np.array_split(data, self.nw, 2):
+            for hsub in np.array_split(wsub, self.nh, 1):
+                for zsub in np.array_split(hsub, self.nz, 0):
+                    splits.append(zsub)
+        return splits
+
+    def merge(self, splits):
+        assert len(splits) == self.batch_size
+        on_x = []
+        for i in range(0, self.nw):
+            on_y = []
+            for j in range(self.nh):
+                on_z = []
+                for k in range(self.nz):
+                    on_z.append(splits[i * self.nz * self.nh + j * self.nz + k])
+                on_y.append(torch.cat(on_z, dim=-3))
+            on_x.append(torch.cat(on_y, dim=-2))
+        return torch.cat(on_x, dim=-1)
+
+    def get_batch(self):
+        return self.batch_size
+
+
 class SimpleDumper:
     def __init__(self, loader_config, exp_name, project_dir):
         self.config = loader_config
         self.title = exp_name
         self.project_dir = project_dir
 
-    def dump(self, gt_volume, prediction, images, iteration):
-        save_dir = os.path.join(self.project_dir, 'numpy', f'{iteration}')
+    def zipdir(self, ziph):
+        # ziph is zipfile handle
+        for root, dirs, files in os.walk(os.path.join(self.project_dir, 'numpy')):
+            for file in files:
+                ziph.write(os.path.join(root, file),
+                           os.path.relpath(os.path.join(root, file),
+                                           os.path.join(os.path.join(self.project_dir))))
+
+    def dump(self, gt_volume, prediction, images, patient_name, score='Nan'):
+        save_dir = os.path.join(self.project_dir, 'numpy', f'{patient_name}')
         pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True)
         np.save(os.path.join(save_dir, 'gt.npy'), gt_volume)
         np.save(os.path.join(save_dir, 'pred.npy'), prediction)
         np.save(os.path.join(save_dir, 'input.npy'), images)
+        with open(os.path.join(save_dir, 'score.txt'), "w") as text_file:
+            text_file.write(f"accuracy here: {score}")
+
+    def save_zip(self):
+        zipf = zipfile.ZipFile(os.path.join(self.project_dir, 'numpy.zip'), 'w', zipfile.ZIP_DEFLATED)
+        self.zipdir(zipf)
+        zipf.close()
 
 
 if __name__ == '__main__':

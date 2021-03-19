@@ -194,6 +194,11 @@ class Rescale:
         self.scale_factor = scale_factor
         self.size = size
         self.interp_fn = interp_fn
+        # using a custom function to avoid the align corner warnings/errors
+        if self.interp_fn == 'nearest':
+            self.scale_fn = lambda img:  interpolate(img, size=self.size, scale_factor=self.scale_factor, mode=self.interp_fn, recompute_scale_factor=False)
+        else:
+            self.scale_fn = lambda img: interpolate(img, size=self.size, scale_factor=self.scale_factor, mode=self.interp_fn, align_corners=False, recompute_scale_factor=False)
 
     def __call__(self, data):
 
@@ -206,9 +211,7 @@ class Rescale:
         assert image.ndim == 3
 
         image = image.unsqueeze(0).unsqueeze(0)
-        image = interpolate(
-            image, size=self.size, scale_factor=self.scale_factor, mode=self.interp_fn, recompute_scale_factor=False
-        ).squeeze()
+        image = self.scale_fn(image).squeeze()
 
         if not tensor_flag:
             return image.numpy()

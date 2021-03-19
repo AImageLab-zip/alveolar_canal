@@ -5,30 +5,32 @@ import os
 from matplotlib import pyplot as plt
 from augmentations import RandomRotate, RandomContrast, ElasticDeformation, Normalize, ToTensor, CenterPad, RandomVerticalFlip, Resize, Rescale
 import torch
-import utils
+import json
 from tqdm import tqdm
 from Jaw import Jaw
 import logging
+from utils import Splitter
 
 MAXILLO_DICOM_MAX = 64535
 
 
 class AlveolarDataloader(Dataset):
 
-    def __init__(self, config, in_ch=1):
+    def __init__(self, config):
 
         self.config = config
-        self.in_ch = in_ch
 
         self.patients = {
             'data': [],
-            'gt': []
+            'gt': [],
+            'name': []
         }
         self.indices = {
             'test': [],
             'train': [],
             'val': []
         }
+        self.splitter = Splitter(config.get('split_volumes', (2, 2, 3)))
 
         self.augmentation = transforms.Compose([
             RandomRotate(execution_probability=0.5, order=4),
@@ -40,52 +42,57 @@ class AlveolarDataloader(Dataset):
         reshape_size = self.config.get('resize_shape', (152, 224, 256))
         self.reshape_size = tuple(reshape_size) if type(reshape_size) == list else reshape_size
 
-        gt_filename = 'gt_4labels.npy' if len(self.config['labels']) > 2 else 'gt_2labels.npy'
+        gt_filename = 'gt_4labels.npy' if len(self.config['labels']) > 2 else 'gt_alpha.npy'
         index = 0
 
-        patients = os.listdir(config['file_paths'])
-        tot_patients = len(patients)
-        patients_ids = np.arange(tot_patients)
-        np.random.shuffle(patients_ids)
-        test_ids = patients_ids[:int(tot_patients * 0.2)]
-        val_ids = patients_ids[int(tot_patients * 0.2):int(tot_patients * 0.3)]
-        for patient_num, folder in tqdm(enumerate(patients), total=len(os.listdir(config['file_paths']))):
-            if config.get('use_dicom', False):
-                data = Jaw(os.path.join(config['file_paths'], folder, 'DICOM', 'DICOMDIR')).get_volume()
-            else:
-                data = np.load(os.path.join(config['file_paths'], folder, 'data.npy'))
-            gt = np.load(os.path.join(config['file_paths'], folder, gt_filename))
+        with open(os.path.join('configs', 'splits.json')) as f:
+            folder_splits = json.load(f)
 
-            assert data.max() <= MAXILLO_DICOM_MAX  # maximum values of those dicom
-            assert data.max() > 1  # data should not be normalized by default
+        for partition, folders in folder_splits.items():
+            for patient_num, folder in tqdm(enumerate(folders), total=len(folders)):
+                if config.get('use_dicom', False):
+                    data = Jaw(os.path.join(config['file_paths'], folder, 'DICOM', 'DICOMDIR')).get_volume()
+                else:
+                    data = np.load(os.path.join(config['file_paths'], folder, 'data.npy'))
+                gt = np.load(os.path.join(config['file_paths'], folder, gt_filename))
 
-            partition = 'train'
-            if patient_num in test_ids:
-                partition = 'test'
-                logging.info(f'INFO: this patient is in the test-set: {patient_num}, {folder}')
-            elif patient_num in val_ids:
-                partition = 'val'
-                logging.info(f'INFO: this patient is in the val-set: {patient_num}, {folder}')
+                assert data.max() <= MAXILLO_DICOM_MAX  # maximum values of those dicom
+                assert data.max() > 1  # data should not be normalized by default
 
-            right, gright, left, gleft = self.preprocessing(data, gt, folder, partition=partition)
-            self.patients['data'] += [right, left]
-            self.patients['gt'] += [gright, gleft]
+                data, gt = self.preprocessing(data, gt, folder, partition=partition)
+                self.patients['data'] += data
+                self.patients['gt'] += gt
+                self.patients['name'] += [folder for i in data]  # replicating N times the name of the folder
 
-            self.indices[partition] += [index, index + 1]
-            index = index + 2
+                self.indices[partition] += list(range(index, index + len(data)))
+                index = index + len(data)
 
-        self.mean = self.config.get('mean', np.mean(self.patients['data']))
-        self.std = self.config.get('std', np.std(self.patients['data']))
-        print(f'mean for the dataset: {self.mean}, std: {self.std}')
+        self.mean = self.config.get('mean', None)
+        if self.mean is None:
+            logging.info('going to compute mean')
+            self.mean = np.mean(self.patients['data'])
+
+        self.std = self.config.get('std', None)
+        if self.std is None:
+            logging.info('going to compute std')
+            self.std = np.std(self.patients['data'])
+
+        logging.info(f'mean for the dataset: {self.mean}, std: {self.std}')
 
         self.indices['train'] = np.asarray(self.indices['train'])
         self.indices['test'] = np.asarray(self.indices['test'])
         self.indices['val'] = np.asarray(self.indices['val'])
 
-        self.weights = self.config.get('weights', self.median_frequency_balancing())
-        if not torch.is_tensor(self.weights):
+        self.weights = self.config.get('weights', None)
+        if self.weights is None:
+            logging.info('going to compute weights')
+            self.weights = self.median_frequency_balancing()
+        else:
             self.weights = torch.Tensor(self.weights)
-        print(f'weights for this dataset: {self.weights}')
+        logging.info(f'weights for this dataset: {self.weights}')
+
+        logging.info('folders in validation set: {}'.format(folder_splits['val']))
+        logging.info('folders in test set: {}'.format(folder_splits['test']))
 
     def __len__(self):
         return self.indices['train'].size + self.indices['test'].size + self.indices['val'].size
@@ -98,10 +105,14 @@ class AlveolarDataloader(Dataset):
         # rescale
         data = data.astype(np.float) / MAXILLO_DICOM_MAX  # maximum became 1
 
-        Z, H, W = data.shape[-3:]
+        D, H, W = data.shape[-3:]
+        rD, rH, rW = self.reshape_size
+        tmp_ratio = np.array((D/W, H/W, 1))
+        pad_factor = tmp_ratio / np.array((rD/rW, rH/rW, 1))
+        pad_factor /= np.max(pad_factor)
+        new_shape = np.array((D, H, W)) / pad_factor
+        new_shape = np.round(new_shape).astype(np.int)
 
-        ratio = self.reshape_size[1]/self.reshape_size[2]
-        new_shape = (Z, H, H // ratio) if H / W > ratio else (Z, W * ratio, W)
         data = CenterPad(new_shape)(data)
 
         # suppress areas out of the splines
@@ -120,12 +131,10 @@ class AlveolarDataloader(Dataset):
             gt = CenterPad(new_shape)(gt)
             gt = Rescale(size=self.reshape_size, interp_fn='nearest')(gt)
 
-        # split the jawbone in two pieces
-        left, right = np.split(data, [int(0.5 * data.shape[2])], axis=2)
-        gleft, gright = np.split(gt, [int(0.5 * gt.shape[2])], axis=2)
-        gright = gright[..., :-1] if gright.shape[-1] != gleft.shape[-1] else gright
+        data = self.splitter.split(data)
+        gt = self.splitter.split(gt)
 
-        return left, gleft, right, gright,
+        return data, gt
 
     def __getitem__(self, index):
         vol, gt = self.patients['data'][index].astype(np.float32), self.patients['gt'][index].astype(np.int64)
@@ -134,8 +143,11 @@ class AlveolarDataloader(Dataset):
             assert np.array_equal(gt, gt.astype(bool)), 'something wrong with augmentations here'
         vol = transforms.Normalize(self.mean, self.std)(ToTensor()(vol.copy()))
         gt = ToTensor()(gt.copy())
-        vol = vol.unsqueeze(0).repeat(self.in_ch, 1, 1, 1)  # creating the channel axis and making it RGB if needed
-        return vol, gt
+        vol = vol.unsqueeze(0).repeat(3, 1, 1, 1)  # creating the channel axis and making it RGB
+        return vol, gt, self.patients['name'][index]
+
+    def get_splitter(self):
+        return self.splitter
 
     def split_dataset(self):
 
@@ -210,17 +222,7 @@ class AlveolarDataloader(Dataset):
         return not_class_pixel_count / (class_pixel_count + 1e-06)
 
     def custom_collate(self, batch):
-
-        images = [item[0] for item in batch]
-        # finding the best common shape for this batch and pad the data
-        batch_shape = np.max(np.array([p.shape for p in images]), axis=0)
-        resizer = Resize(self.config.get('labels'), self.LCM)
-        batch_shape = resizer.closestDistanceForDivision(np.asarray(batch_shape))
-
-        # resizing the entire batch at the final shape
-        images = torch.stack([Rescale(size=tuple(batch_shape))(image) for image in images])
-        # images = torch.stack([resizer.reshape(image, new_shape=batch_shape, pad_val=image.min()) for image in images])
-
-        labels = [item[1].unsqueeze(0) if item[1].ndim == 3 else item[1] for item in batch]
-
-        return images, labels
+        images = torch.stack([item[0] for item in batch])
+        labels = [item[1] for item in batch]
+        names = [item[2] for item in batch]
+        return images, labels, names

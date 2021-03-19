@@ -37,5 +37,10 @@ data-loader:
   mean: 0.4276
   std: 0.1615
   weights:
-    - 7.0382e-04
-    - 9.9930e-01
+    - 7.03e-04
+    - 9.99e-01
+
+  split_volumes:
+    - 2
+    - 2
+    - 3

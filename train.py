@@ -9,14 +9,14 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, war
     model.train()
     evaluator.reset_eval()
     losses = []
-    for i, (images, labels) in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
+    for i, (images, labels, _) in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
 
         images = images.cuda()
         labels = labels.cuda()
 
         optimizer.zero_grad()
 
-        outputs = model(images)
+        outputs = model(images)  # BS, Classes, Z, H, W
         loss = loss_fn(outputs, labels, warmup)
 
         losses.append(loss.item())
@@ -27,12 +27,12 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, war
         if outputs.shape[1] > 1:
             outputs = torch.argmax(torch.nn.Softmax(dim=1)(outputs), dim=1).cpu().numpy()
         else:
-            outputs = nn.Sigmoid()(outputs)
+            outputs = nn.Sigmoid()(outputs)  # BS, 1, Z, H, W
             outputs[outputs > .5] = 1
             outputs[outputs != 1] = 0
-            outputs = outputs.squeeze().cpu().detach().numpy()
+            outputs = outputs.squeeze().cpu().detach().numpy()  # BS, Z, H, W
 
-        labels = labels.cpu().numpy()
+        labels = labels.cpu().numpy()  # BS, Z, H, W
         evaluator.iou(outputs, labels)
 
     epoch_train_loss = sum(losses) / len(losses)

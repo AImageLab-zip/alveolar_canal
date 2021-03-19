@@ -46,7 +46,6 @@ class JaccardLoss(torch.nn.Module):
         return jaccard(input, target, per_image=self.per_image, non_empty=self.non_empty, min_pixels=self.min_pixels)
 
 
-
 class DiceLoss(nn.Module):
     def __init__(self, classes, device):
         super().__init__()

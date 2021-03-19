@@ -19,10 +19,6 @@ import numpy as np
 from os import path
 import socket
 
-in_channels = {
-    'Multiscale': 3,
-    'UNet3D': 1
-}
 
 def main(experiment_name):
 
@@ -37,9 +33,10 @@ def main(experiment_name):
     train_config = config.get('trainer', None)
     model_config = config.get('model')
 
+    num_classes = 1 if len(loader_config['labels']) <= 2 else len(loader_config['labels'])
     model = utils.load_model(
         model_config,
-        num_classes=len(loader_config['labels']),
+        num_classes=num_classes,
     )
 
     ngpus = torch.cuda.device_count()
@@ -77,34 +74,35 @@ def main(experiment_name):
 
     evaluator = Evaluator(loader_config)
 
-    alveolar_data = AlveolarDataloader(config=loader_config, in_ch=in_channels[model_config['name']])
+    alveolar_data = AlveolarDataloader(config=loader_config)
     train_id, test_id, val_id = alveolar_data.split_dataset()
 
     train_loader = data.DataLoader(
         alveolar_data,
         batch_size=loader_config['batch_size'],
-        # sampler=SubsetRandomSampler(train_id),
-        sampler=train_id,
+        sampler=SubsetRandomSampler(train_id),
         num_workers=loader_config['num_workers'],
         pin_memory=True,
         drop_last=True,
     )
     test_loader = data.DataLoader(
         alveolar_data,
-        batch_size=2,
+        batch_size=loader_config['batch_size'],
         sampler=test_id,
         num_workers=loader_config['num_workers'],
         pin_memory=True,
         drop_last=True,
+        collate_fn=alveolar_data.custom_collate
     )
 
     val_loader = data.DataLoader(
         alveolar_data,
-        batch_size=2,
+        batch_size=loader_config['batch_size'],
         sampler=val_id,
         num_workers=loader_config['num_workers'],
         pin_memory=True,
         drop_last=True,
+        collate_fn=alveolar_data.custom_collate
     )
 
     loss = LossFn(config.get('loss'), loader_config, weights=alveolar_data.get_weights())
@@ -121,8 +119,7 @@ def main(experiment_name):
             logging.info("No checkpoint exists from '{}'. Skipping...".format(train_config['checkpoint_path']))
 
     writer = SummaryWriter(log_dir=os.path.join(config['tb_dir'], experiment_name), purge_step=current_epoch)
-    vol_writer = utils.SimpleDumper(loader_config, experiment_name, project_dir) if config.get('dump_results', False) else None
-
+    vol_writer = utils.SimpleDumper(loader_config, experiment_name, project_dir) if args.dump_results else None
 
     if train_config['do_train']:
         best_metric = 0
@@ -136,7 +133,7 @@ def main(experiment_name):
 
             epoch_loss, _ = train(model, train_loader, loss, optimizer, epoch, writer, evaluator, warm_up[epoch])
 
-            val_metric = test(model, val_loader, loss, epoch, evaluator, warm_up[epoch])
+            val_metric = test(model, val_loader, alveolar_data.get_splitter(), epoch, evaluator)
             writer.add_scalar('Metric/validation', val_metric, epoch)
             logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric: {val_metric}')
 
@@ -169,15 +166,19 @@ def main(experiment_name):
                     os.path.join(project_dir, 'checkpoints', 'cp_epoch_' + str(epoch) + '.pth')
                 )
 
-                test_score = test(model, test_loader, loss, train_config['epochs'] + 1, evaluator, 1)
+                test_score = test(model, test_loader, alveolar_data.get_splitter(), train_config['epochs'] + 1, evaluator)
                 logging.info(f'TEST Epoch [{epoch}] - Mean Metric: {test_score}')
                 writer.add_scalar('Metric/Test', test_score, epoch)
 
         logging.info('BEST METRIC IS {}'.format(best_metric))
 
     # final test
-    test_score = test(model, test_loader, loss, train_config['epochs'] + 1, evaluator, 1, dumper=vol_writer)
-    logging.info(f'FINAL TEST - Mean Metric: {test_score}')
+    test_scores = test(model, test_loader, alveolar_data.get_splitter(), train_config['epochs'] + 1, evaluator, dumper=vol_writer, final_mean=False)
+    logging.info(f'final metric list: {test_scores}')
+    logging.info(f'FINAL TEST - Mean Metric: {np.mean(test_scores)}')
+    if vol_writer is None:
+        logging.info("going to create zip archive. wait the end of the run pls")
+        vol_writer.save_zip()
 
 
 if __name__ == '__main__':
@@ -189,7 +190,8 @@ if __name__ == '__main__':
 
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('--base_config', default="config.yaml", help='path to the yaml config file')
-    arg_parser.add_argument('--verbose', action='store_true', help="if true sdout is not redirected")
+    arg_parser.add_argument('--verbose', action='store_true', help="if true sdout is not redirected, default: false")
+    arg_parser.add_argument('--dump_results', action='store_true', help="dump test data, default: false")
 
     args = arg_parser.parse_args()
     yaml_path = args.base_config

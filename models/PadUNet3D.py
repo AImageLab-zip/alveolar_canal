@@ -5,10 +5,9 @@ from torch.cuda.amp import autocast
 
 class padUNet3D(nn.Module):
     def __init__(self, n_classes):
-        self.in_channel = 1
         self.n_classes = n_classes
         super(padUNet3D, self).__init__()
-        self.ec0 = self.conv3Dblock(self.in_channel, 32)
+        self.ec0 = self.conv3Dblock(3, 32)
         self.ec1 = self.conv3Dblock(32, 64, kernel_size=3, padding=1)  # third dimension to even val
         self.ec2 = self.conv3Dblock(64, 64)
         self.ec3 = self.conv3Dblock(64, 128)
@@ -35,13 +34,11 @@ class padUNet3D(nn.Module):
     def conv3Dblock(self, in_channels, out_channels, kernel_size=(3, 3, 3), stride=1, padding=(1, 1, 1)):
         return nn.Sequential(
                 nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding),
-                nn.BatchNorm3d(out_channels, momentum=0.001),
+                nn.BatchNorm3d(out_channels),
                 nn.ReLU()
         )
 
     def forward(self, x):
-
-
         h = self.ec0(x)
         feat_0 = self.ec1(h)
         h = self.pool0(feat_0)

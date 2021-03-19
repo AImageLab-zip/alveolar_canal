@@ -6,7 +6,7 @@ seed: 47
 # model configuration
 model:
   # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale
-  name: Multiscale
+  name: UNet3D
   sharding: False
 
 # trainer configuration
@@ -14,7 +14,7 @@ trainer:
   # path to the checkpoint directory
   checkpoint_path: null
   # skip train or do train?
-  do_train: False
+  do_train: True
   # how many iterations between validations
   validate_after_iters: 2
   # max number of epochs
@@ -33,7 +33,7 @@ optimizer:
 loss:
   # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss, Jaccard
   name:
-    - DiceLoss
+    - Jaccard
 
 lr_scheduler:
   # MultiStepLR, Plateau, null, ...
@@ -42,7 +42,7 @@ lr_scheduler:
 
 data-loader:
   # data loaders configuration
-  batch_size: 2
+  batch_size: 6
   num_workers: 0
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
 
@@ -51,16 +51,16 @@ data-loader:
   mean: 0.4276
   std: 0.1615
   weights:
-    - 7.0382e-04
-    - 9.9930e-01
+    - 7.03e-04
+    - 9.99e-01
 
   warm_up_length: 0
 
-  # KEEP IN MIND: SCALE RATION W-H SHOULD BE AROUND 0.87, Z about 0.5 of H
+  # KEEP IN MIND: SCALE RATIOS SHOULD BE AROUND (0.4568, 0.8733, 1)
   resize_shape:
-    - 100
-    - 192
-    - 224
+    - 64
+    - 128
+    - 144
 
 #  labels:
 #    UNLABELED: 3
@@ -71,3 +71,8 @@ data-loader:
   labels:
     BACKGROUND: 0
     INSIDE: 1
+
+  split_volumes:
+    - 1
+    - 1
+    - 2
