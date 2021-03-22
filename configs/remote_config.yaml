@@ -6,7 +6,7 @@ seed: 47
 # model configuration
 model:
   # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale
-  name: UNet3D
+  name: Multiscale
   sharding: False
 
 # trainer configuration
@@ -14,7 +14,7 @@ trainer:
   # path to the checkpoint directory
   checkpoint_path: null
   # skip train or do train?
-  do_train: True
+  do_train: False
   # how many iterations between validations
   validate_after_iters: 2
   # max number of epochs
@@ -42,7 +42,7 @@ lr_scheduler:
 
 data-loader:
   # data loaders configuration
-  batch_size: 6
+  batch_size: 18
   num_workers: 0
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
 

@@ -1,7 +1,5 @@
 import torch 
 import torch.nn as nn
-from torch.cuda.amp import autocast
-
 
 class padUNet3D(nn.Module):
     def __init__(self, n_classes):

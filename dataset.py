@@ -45,7 +45,7 @@ class AlveolarDataloader(Dataset):
         gt_filename = 'gt_4labels.npy' if len(self.config['labels']) > 2 else 'gt_alpha.npy'
         index = 0
 
-        with open(os.path.join('configs', 'splits.json')) as f:
+        with open(os.path.join('/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs', 'splits.json')) as f:
             folder_splits = json.load(f)
 
         for partition, folders in folder_splits.items():
