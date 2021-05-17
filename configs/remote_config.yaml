@@ -5,8 +5,8 @@ tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
 seed: 47
 # model configuration
 model:
-  # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale
-  name: Multiscale
+  # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale, PositionalUNet3D
+  name: transUNet3D
   sharding: False
 
 # trainer configuration
@@ -14,7 +14,7 @@ trainer:
   # path to the checkpoint directory
   checkpoint_path: null
   # skip train or do train?
-  do_train: False
+  do_train: True
   # how many iterations between validations
   validate_after_iters: 2
   # max number of epochs
@@ -39,17 +39,23 @@ lr_scheduler:
   # MultiStepLR, Plateau, null, ...
   name: Plateau
 
-
 data-loader:
   # data loaders configuration
-  batch_size: 18
+  batch_size: 4
   num_workers: 0
+  # split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
+  split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
 
   # create arch line and set to zero all the values out of the arch
   background_suppression: False
-  mean: 0.4276
-  std: 0.1615
+
+  volumes_max: 2100
+  volumes_min: 0
+
+  mean: 0.08435
+  std: 0.17885
+
   weights:
     - 7.03e-04
     - 9.99e-01
@@ -58,9 +64,9 @@ data-loader:
 
   # KEEP IN MIND: SCALE RATIOS SHOULD BE AROUND (0.4568, 0.8733, 1)
   resize_shape:
-    - 64
-    - 128
-    - 144
+    - 136
+    - 256
+    - 304
 
 #  labels:
 #    UNLABELED: 3
@@ -74,5 +80,5 @@ data-loader:
 
   split_volumes:
     - 1
-    - 1
+    - 8
     - 2

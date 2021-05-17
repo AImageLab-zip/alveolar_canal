@@ -86,7 +86,7 @@ if __name__ == '__main__':
     next_id = start_id
     for yaml_dir in yaml_dirs:
         next_id = next_id + 1
-        sbatch += 'if [ "$SLURM_ARRAY_TASK_ID" -eq "{}" ]; then\n\t {} {}\nfi\n\n'.format(next_id, SRUN_COMMAND, yaml_dir)
+        sbatch += '\nif [ "$SLURM_ARRAY_TASK_ID" -eq "{}" ]; then\n\t {} {}\nfi\n\n'.format(next_id, SRUN_COMMAND, yaml_dir)
 
     for line in sbatch.splitlines():
         if line.startswith('#SBATCH --array='):

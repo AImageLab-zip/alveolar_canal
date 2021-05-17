@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from Plane import Plane
 import processing
-from pydicom.pixel_data_handlers.util import apply_voi_lut
+from scipy.ndimage import affine_transform
 
 OVERLAY_ADDR = 0x6004
 MIN_QUANTILE = 0.02
@@ -15,38 +15,43 @@ MAX_QUANTILE = 0.98
 
 class Jaw:
 
-    def __init__(self, dicomdir_path, flip=True):
+    def __init__(self, dicomdir_path):
         """
         initialize a jaw object from a dicomdir path
         Args:
             dicomdir_path (String): path to the dicomdir file, MUST include the final DICOMDIR,
-            flip (Bool): initial flip of the volume and dicom file lists?
         """
         basename = os.path.basename(dicomdir_path)
         if basename.lower() != 'dicomdir':
             raise Exception("ERROR: DICOMDIR PATH HAS TO END WITH DICOMDIR")
 
         self.dicom_dir = read_dicomdir(os.path.join(dicomdir_path))
-        self.filenames, self.dicom_files, self.volume = dicom_from_dicomdir(self.dicom_dir)
-        self.Z, self.H, self.W = self.volume.shape
-        self.HU_intercept, self.HU_slope = self.__get_HU_rescale_params()
+        self.filenames, self.dicom_files, self.raw_volume = dicom_from_dicomdir(self.dicom_dir)
 
-        if flip:  # Z-axis has to be flipped
+        w = self.dicom_files[5].WindowWidth
+        c = self.dicom_files[5].WindowCenter
+        ymax = c + (w / 2)
+        ymin = c - (w / 2)
+
+        # scale/intercept
+        self.HU_intercept, self.HU_slope = self.__get_HU_rescale_params()
+        tmp = self.raw_volume * self.HU_slope + self.HU_intercept
+
+        # windowing
+        self.volume = tmp.copy()
+        self.volume = ((self.volume - (c - .5)) / (w - 1) + .5) * (ymax - ymin) + ymin
+        self.volume[tmp < (c - .5 - (w - 1) / 2)] = ymin
+        self.volume[tmp > (c - .5 + (w - 1) / 2)] = ymax
+
+        self.Z, self.H, self.W = self.volume.shape
+
+        if self.dicom_files[1].ImagePositionPatient[-1] - self.dicom_files[0].ImagePositionPatient[-1] > 0:  # Z-axis has to be flipped
             self.volume = np.flip(self.volume, 0)
             self.dicom_files.reverse()
             self.filenames.reverse()
 
-        # DEBUG
-
-        for i in range(self.Z):
-            self.volume[i] = apply_voi_lut(arr=self.volume[i], ds=self.dicom_files[i])
-
-        # END DEBUG
-        # self.__remove_quantiles()
-        self.max_value = self.volume.max()
-        # self.__normalize()
+        self.max_value = np.max(self.volume)
         self.gt_volume = self.__build_ann_volume()
-        self.HU_volume = self.convert_01_to_HU(self.volume)
 
     def merge_predictions(self, plane, pred):
         """
@@ -283,12 +288,6 @@ class Jaw:
 
         return panorex
 
-    def convert_01_to_HU(self, data):
-        return data * self.max_value * self.HU_slope + self.HU_intercept
-
-    def convert_HU_to_01(self, data):
-        return (data - self.HU_intercept) / (self.HU_slope * self.max_value)
-
     ###################
     # GETTERS | SETTERS
     ###################
@@ -305,22 +304,8 @@ class Jaw:
         else:
             return self.volume
 
-    def get_gt_volume(self, labels: list = None):
-        if not labels:
-            return self.gt_volume
-        if np.max(self.gt_volume) in [0, 1]:
-            return self.gt_volume
-        gt = np.zeros_like(self.gt_volume)
-        for label in labels:
-            gt += get_mask_by_label(self.gt_volume, label)
-        return gt
-
-    def get_HU_volume(self):
-        return self.HU_volume
-
-    def get_min_max_HU(self):
-        HU_volume = self.get_HU_volume()
-        return HU_volume.min(), HU_volume.max()
+    def get_gt_volume(self):
+        return self.gt_volume
 
     def set_volume(self, volume):
         self.volume = volume

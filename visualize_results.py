@@ -12,8 +12,8 @@ def simple_viewer(image):
 
 
 COLORS = [
-    (0.4, 0.9, 0.2), (0.8, 0.1, 0.2), (0.1, 0.1, 0.4),
-    (0.6, 1, 0.1), (0, 0, 0), (1, 1, 1), (0, 0.4, 0.3),
+    (0.4, 0.9, 0.2), (0.8, 0.1, 0.2), (0, 0, 0),
+    (0.6, 1, 0.1), (1, 1, 1), (0.1, 0.1, 0.4), (0, 0.4, 0.3),
     (0.1, 0.4, 0.2), (0.1, 1, 0.7), (0.2, 0.9, 0.1),
     (0.3, 0, 0.3), (0.3, 0.9, 1), (0.4, 0, 0.7),
     (0.5, 0, 1), (0.6, 0.3, 0.7)
@@ -81,6 +81,42 @@ class MultiView(HasTraits):
     def show(self):
         self.configure_traits(view=self.view)
 
+
+class SliceView:
+
+    #create direct grid as 256**3 x 4 array
+    @staticmethod
+    def create_8bit_rgb_lut():
+        xl = np.mgrid[0:256, 0:256, 0:256]
+        lut = np.vstack((xl[0].reshape(1, 256**3),
+                            xl[1].reshape(1, 256**3),
+                            xl[2].reshape(1, 256**3),
+                            255 * np.ones((1, 256**3)))).T
+        return lut.astype('int32')
+
+    def __init__(self, *args):
+
+        data = args[0]
+        points = ((data / data.max()) * 255).astype(np.int)
+        colors = np.moveaxis(np.stack((points, points, points)), 0, -1)
+
+        for i, label in enumerate(args[1:]):
+            print(f'{i}-th volume has color: {COLORS[i]}')
+            assert np.array_equal(label, label.astype(bool)), 'provide binary volumes as labels'
+            colors[label == 1] = COLORS[i]
+
+        # N scalars
+        scalars = 256 ** 2 * colors[..., 0] + 256 * colors[..., 1] + colors[..., 2]
+
+        rgb_lut = self.create_8bit_rgb_lut()
+        points_mlab = mlab.volume_slice(scalars, plane_orientation='y_axes')
+        points_mlab.ipw.reslice_interpolate = 'nearest_neighbour'
+
+        # magic to modify lookup table
+        points_mlab.module_manager.scalar_lut_manager.lut._vtk_obj.SetTableRange(0, rgb_lut.shape[0])
+        points_mlab.module_manager.scalar_lut_manager.lut.number_of_colors = rgb_lut.shape[0]
+        points_mlab.module_manager.scalar_lut_manager.lut.table = rgb_lut
+        mlab.show()
 
 if __name__ == '__main__':
     tests = [[vol] for vol in np.random.random((7, 30, 30, 30))]

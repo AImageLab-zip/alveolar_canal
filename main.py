@@ -6,7 +6,7 @@ import torch.utils.data as data
 from torch.utils.data import SubsetRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 import utils
-from dataset import AlveolarDataloader
+from dataset import AlveolarDataloader, NewLoader
 from eval import Eval as Evaluator
 from losses import LossFn
 from test import test
@@ -18,6 +18,8 @@ import yaml
 import numpy as np
 from os import path
 import socket
+from torch.utils.data import DataLoader
+import torchio as tio
 
 
 def main(experiment_name):
@@ -33,10 +35,9 @@ def main(experiment_name):
     train_config = config.get('trainer', None)
     model_config = config.get('model')
 
-    num_classes = 1 if len(loader_config['labels']) <= 2 else len(loader_config['labels'])
     model = utils.load_model(
         model_config,
-        num_classes=num_classes,
+        loader_config,
     )
 
     ngpus = torch.cuda.device_count()
@@ -65,14 +66,36 @@ def main(experiment_name):
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
             optimizer,
             milestones=sched_config['milestones'],
-            gamma=sched_config['factor'],
+            gamma=sched_config.get('factor', 0.1),
         )
     elif scheduler_name == 'Plateau':
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', verbose=True, patience=7)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', verbose=True, patience=7)
     else:
         scheduler = None
 
     evaluator = Evaluator(loader_config)
+
+    # l = NewLoader(loader_config)
+    # patch_size = (136, 56, 151)
+    # train, _, _ = l.split_dataset()
+    # train_queue = tio.Queue(
+    #     train,
+    #     max_length=16,  # queue len
+    #     samples_per_volume=4,
+    #     sampler=tio.data.UniformSampler(patch_size),
+    #     num_workers=0,
+    # )
+    #
+    # ds = DataLoader(train_queue, batch_size=2)
+    # for d in ds:
+    #     data = d['data'][tio.DATA]
+    #     label = d['label'][tio.DATA]
+    #
+    # ds = DataLoader(test, batch_size=2)
+    # for d in ds:
+    #     data = d['data'][tio.DATA]
+    #     label = d['label'][tio.DATA]
+
 
     alveolar_data = AlveolarDataloader(config=loader_config)
     train_id, test_id, val_id = alveolar_data.split_dataset()
@@ -91,7 +114,7 @@ def main(experiment_name):
         sampler=test_id,
         num_workers=loader_config['num_workers'],
         pin_memory=True,
-        drop_last=True,
+        drop_last=False,
         collate_fn=alveolar_data.custom_collate
     )
 
@@ -101,47 +124,47 @@ def main(experiment_name):
         sampler=val_id,
         num_workers=loader_config['num_workers'],
         pin_memory=True,
-        drop_last=True,
+        drop_last=False,
         collate_fn=alveolar_data.custom_collate
     )
 
     loss = LossFn(config.get('loss'), loader_config, weights=alveolar_data.get_weights())
 
-    current_epoch = 0
+    start_epoch = 0
     if train_config['checkpoint_path'] is not None:
         try:
             checkpoint = torch.load(train_config['checkpoint_path'])
             model.load_state_dict(checkpoint['state_dict'])
-            current_epoch = checkpoint['epoch'] + 1
+            start_epoch = checkpoint['epoch'] + 1
             optimizer.load_state_dict(checkpoint['optimizer'])
-            logging.info(f"Checkpoint loaded successfully at epoch {current_epoch}, score:{checkpoint.get('metric', 'unavailable')})")
+            logging.info(f"Checkpoint loaded successfully at epoch {start_epoch}, score:{checkpoint.get('metric', 'unavailable')})")
         except OSError as e:
             logging.info("No checkpoint exists from '{}'. Skipping...".format(train_config['checkpoint_path']))
 
-    writer = SummaryWriter(log_dir=os.path.join(config['tb_dir'], experiment_name), purge_step=current_epoch)
     vol_writer = utils.SimpleDumper(loader_config, experiment_name, project_dir) if args.dump_results else None
 
     if train_config['do_train']:
+        writer = SummaryWriter(log_dir=os.path.join(config['tb_dir'], experiment_name), purge_step=start_epoch)
+
         best_metric = 0
+        # warm_up = np.ones(shape=train_config['epochs'])
+        # warm_up[0:int(train_config['epochs'] * train_config.get('warm_up_length', 0.35))] = np.linspace(
+        #     0, 1, num=int(train_config['epochs'] * train_config.get('warm_up_length', 0.35))
+        # )
 
-        warm_up = np.ones(shape=train_config['epochs'])
-        warm_up[0:int(train_config['epochs'] * train_config.get('warm_up_length', 0.35))] = np.linspace(
-            0, 1, num=int(train_config['epochs'] * train_config.get('warm_up_length', 0.35))
-        )
+        for epoch in range(start_epoch, train_config['epochs']):
 
-        for epoch in range(current_epoch, train_config['epochs']):
-
-            epoch_loss, _ = train(model, train_loader, loss, optimizer, epoch, writer, evaluator, warm_up[epoch])
+            epoch_loss, _ = train(model, train_loader, loss, optimizer, epoch, writer, evaluator)
 
             val_metric = test(model, val_loader, alveolar_data.get_splitter(), epoch, evaluator)
             writer.add_scalar('Metric/validation', val_metric, epoch)
-            logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric: {val_metric}')
+            logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric: {val_metric} - LR: {optimizer.param_groups[0]["lr"]}')
 
             if scheduler is not None:
                 if optim_name == 'SGD' and scheduler_name == 'Plateau':
-                    scheduler.step(epoch_loss)
+                    scheduler.step(val_metric)
                 else:
-                    scheduler.step(current_epoch)
+                    scheduler.step(epoch)
 
             if val_metric > best_metric:
                 best_metric = val_metric
@@ -153,21 +176,21 @@ def main(experiment_name):
                 }
                 torch.save(state, os.path.join(project_dir, 'best.pth'))
 
-            if epoch % 10 == 0:
+            if val_metric < 0.0001 and epoch > 10:
+                logging.info('drop in performances detected. aborting the experiment')
+                return 0
+            else:  # save current weights for debug, overwrite the same file
                 state = {
                     'epoch': epoch,
                     'state_dict': model.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     'metric': val_metric
                 }
+                torch.save(state, os.path.join(project_dir, 'checkpoints', 'debug.pth'))
 
-                torch.save(
-                    state,
-                    os.path.join(project_dir, 'checkpoints', 'cp_epoch_' + str(epoch) + '.pth')
-                )
-
+            if epoch % 5 == 0:
                 test_score = test(model, test_loader, alveolar_data.get_splitter(), train_config['epochs'] + 1, evaluator)
-                logging.info(f'TEST Epoch [{epoch}] - Mean Metric: {test_score}')
+                logging.info(f'TEST Epoch [{epoch}] - Mean Metric: {test_score} - LR: {optimizer.param_groups[0]["lr"]}')
                 writer.add_scalar('Metric/Test', test_score, epoch)
 
         logging.info('BEST METRIC IS {}'.format(best_metric))
@@ -192,6 +215,7 @@ if __name__ == '__main__':
     arg_parser.add_argument('--base_config', default="config.yaml", help='path to the yaml config file')
     arg_parser.add_argument('--verbose', action='store_true', help="if true sdout is not redirected, default: false")
     arg_parser.add_argument('--dump_results', action='store_true', help="dump test data, default: false")
+    arg_parser.add_argument('--test', action='store_true', help="set up test params, default: false")
 
     args = arg_parser.parse_args()
     yaml_path = args.base_config
@@ -204,23 +228,12 @@ if __name__ == '__main__':
     else:
         config = utils.load_config_yaml(BASE_YAML_PATH)  # load base config (remote or local)
         experiment_name = config.get('title', 'test')
-        if experiment_name == 'test' or yaml_path == 'none':
-            print('this experiment is on debug. no folders are going to be created.')
-            project_dir = os.path.join(RESULTS_DIR, 'test')
-        else:
-            print('creating a new config file for this experiment: ', yaml_path)
-            project_dir = os.path.join(RESULTS_DIR, experiment_name)
-            # creating main directory for this experiment, cp subdir, result subdir, logsubdir
-            pathlib.Path(os.path.join(project_dir)).mkdir(parents=True, exist_ok=True)
-            pathlib.Path(os.path.join(project_dir, 'checkpoints')).mkdir(parents=True, exist_ok=True)
-            pathlib.Path(os.path.join(project_dir, 'files')).mkdir(parents=True, exist_ok=True)
-            pathlib.Path(os.path.join(project_dir, 'numpy')).mkdir(parents=True, exist_ok=True)
-            print("local folders and config files created. going to execute.")
+        print('this experiment is on debug. no folders are going to be created.')
+        project_dir = os.path.join(RESULTS_DIR, 'test')
 
     log_dir = pathlib.Path(os.path.join(project_dir, 'logs'))
     log_dir.mkdir(parents=True, exist_ok=True)
-    with open(path.join(log_dir, 'config.yaml'), 'w') as file:
-        yaml.dump(config, file)
+
     if not args.verbose:
         # redirect streams to project dir
         sys.stdout = open(os.path.join(log_dir, 'std.log'), 'a+')
@@ -230,4 +243,11 @@ if __name__ == '__main__':
         # not create folder here, just log to console
         utils.set_logger()
 
+    if args.test:
+        config['trainer']['do_train'] = False
+        config['data-loader']['num_workers'] = False
+        config['trainer']['checkpoint_path'] = os.path.join(project_dir, 'best.pth')
+
+    # utils.data_from_dicom('Y:\work\datasets\maxillo\VOLUMES')
+    # exit(666)
     main(experiment_name)

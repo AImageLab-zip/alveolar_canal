@@ -4,20 +4,20 @@ from tqdm import tqdm
 from torch import nn
 
 
-def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, warmup):
+def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator):
 
     model.train()
     evaluator.reset_eval()
     losses = []
-    for i, (images, labels, _) in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
+    for i, (images, labels, _, emb_codes) in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
 
         images = images.cuda()
         labels = labels.cuda()
 
         optimizer.zero_grad()
 
-        outputs = model(images)  # BS, Classes, Z, H, W
-        loss = loss_fn(outputs, labels, warmup)
+        outputs = model(images, emb_codes)  # BS, Classes, Z, H, W
+        loss = loss_fn(outputs, labels)
 
         losses.append(loss.item())
         loss.backward()

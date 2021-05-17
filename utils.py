@@ -12,6 +12,8 @@ import torch
 import math
 from models.PadUNet3Dmulti_2 import padUNet3DMulti
 from models.PadUNet3D import padUNet3D
+from models.transUnet import TransUNet3D
+from models.PadUNet3D import PositionalpadUNet3D as PospadUNet3D
 from models.ResidualEncoder import ResNetEncoder
 from models.ResNet50.ResNet50 import ResNet50
 from models.Multiscale.Multiscale import Multiscale3D
@@ -21,6 +23,7 @@ from Jaw import Jaw
 import torch
 import zipfile
 import json
+from tqdm import tqdm
 
 
 def create_split(dataset_path):
@@ -44,6 +47,15 @@ def create_split(dataset_path):
     f = open("configs/splits.json", "w")
     f.write(json)
     f.close()
+
+
+def data_from_dicom(directory):
+    folders = listdir(directory)
+    for i, (folder) in tqdm(enumerate(folders), total=len(folders), desc='creating the gorgeous dataset'):
+        TARGET_FOLDER = os.path.join(directory, folder, 'DICOM', 'DICOMDIR')
+        if os.path.exists(TARGET_FOLDER):
+            j = Jaw(TARGET_FOLDER)
+            np.save(os.path.join(directory, folder, 'data.npy'), j.get_volume())
 
 
 def fix_dataset_folder(directory):
@@ -129,12 +141,24 @@ def load_config_yaml(config_file):
     return yaml.safe_load(open(config_file, 'r'))
 
 
-def load_model(model_config, num_classes):
+def load_model(model_config, loader_config):
+
+    num_classes = 1 if len(loader_config['labels']) <= 2 else len(loader_config['labels'])
+    embedding = (
+        np.prod(loader_config['split_volumes']),
+        1,
+        *(np.asarray(loader_config['resize_shape']) / (8 * np.asarray(loader_config['split_volumes']))).astype(int)
+    )
     name = model_config.get('name', 'UNet3D')
+
     if name == 'UNet3D':
         if model_config.get('sharding', False):
             return padUNet3DMulti(num_classes)
         return padUNet3D(n_classes=num_classes)
+    elif name == 'PositionalUNet3D':
+        return PospadUNet3D(n_classes=num_classes, emb_shape=embedding)
+    elif name == 'transUNet3D':
+        return TransUNet3D(n_classes=num_classes, emb_shape=embedding)
     elif name == 'Multiscale':
         return Multiscale3D(num_classes=num_classes)
     elif model_config['name'] == 'RESNET18':
@@ -426,9 +450,9 @@ class Splitter:
 
     def split(self, data):
         splits = []
-        for wsub in np.array_split(data, self.nw, 2):
-            for hsub in np.array_split(wsub, self.nh, 1):
-                for zsub in np.array_split(hsub, self.nz, 0):
+        for wid, wsub in enumerate(np.array_split(data, self.nw, 2)):
+            for hid, hsub in enumerate(np.array_split(wsub, self.nh, 1)):
+                for zid, zsub in enumerate(np.array_split(hsub, self.nz, 0)):
                     splits.append(zsub)
         return splits
 

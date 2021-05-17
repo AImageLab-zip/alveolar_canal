@@ -33,9 +33,14 @@ trainer:
 
 data-loader:
   num_workers: 8
+  split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
-  mean: 0.4276
-  std: 0.1615
+
+  volumes_min: 0
+
+  mean: 0.08435
+  std: 0.17885
+
   weights:
     - 7.03e-04
     - 9.99e-01

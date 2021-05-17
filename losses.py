@@ -84,23 +84,27 @@ class LossFn:
         self.classes = loader_config['labels']
         self.weights = weights
 
-    def factory_loss(self, pred, gt, name, warmup):
+    def factory_loss(self, pred, gt, name):
 
         if name == 'CrossEntropyLoss':
-            # sigmoid here which is included in other losses
-            pred = torch.nn.Sigmoid()(pred)
+            pred = torch.nn.Sigmoid()(pred)  # sigmoid here which is already built-in in other losses
             loss_fn = nn.CrossEntropyLoss(weight=self.weights).to(self.device)
         elif name == 'BCEWithLogitsLoss':
-            # one hot encoding for cross entropy with digits. Bx1xHxW -> BxCxHxW
-            B, C, Z, H, W = pred.shape
-            gt_flat = gt.reshape(-1).unsqueeze(dim=1)  # 1xB*Z*H*W
+            if pred.shape[1] == 1:
+                pred = pred.squeeze()
+                gt = gt.float()
+                loss_fn = nn.BCEWithLogitsLoss(pos_weight=1/self.weights[0]).to(self.device)
+            else:
+                # one hot encoding for cross entropy with digits. Bx1xHxW -> BxCxHxW
+                B, C, Z, H, W = pred.shape
+                gt_flat = gt.reshape(-1).unsqueeze(dim=1)  # 1xB*Z*H*W
 
-            gt_onehot = torch.zeros(size=(B * Z * H * W, C), dtype=torch.float).to(self.device)  # 1xB*Z*H*W destination tensor
-            gt_onehot.scatter_(1, gt_flat, 1)  # writing the conversion in the destination tensor
+                gt_onehot = torch.zeros(size=(B * Z * H * W, C), dtype=torch.float).to(self.device)  # 1xB*Z*H*W destination tensor
+                gt_onehot.scatter_(1, gt_flat, 1)  # writing the conversion in the destination tensor
 
-            gt = torch.squeeze(gt_onehot).reshape(B, Z, H, W, C)  # reshaping to the original shape
-            pred = pred.permute(0, 2, 3, 4, 1)  # for BCE we want classes in the last axis
-            loss_fn = nn.BCEWithLogitsLoss(pos_weight=self.weights).to(self.device)
+                gt = torch.squeeze(gt_onehot).reshape(B, Z, H, W, C)  # reshaping to the original shape
+                pred = pred.permute(0, 2, 3, 4, 1)  # for BCE we want classes in the last axis
+                loss_fn = nn.BCEWithLogitsLoss(pos_weight=self.weights).to(self.device)
         elif name == 'Jaccard':
             assert pred.shape[1] == 1, 'this loss works with a binary prediction'
             return JaccardLoss(weight=self.weights, apply_sigmoid=True)(pred, gt)
@@ -114,7 +118,7 @@ class LossFn:
 
         return loss_fn(pred, gt)
 
-    def __call__(self, pred, gt, warmup):
+    def __call__(self, pred, gt):
         """
         SHAPE MUST BE Bx1xHxW
         :param pred:
@@ -127,7 +131,7 @@ class LossFn:
 
         cur_loss = []
         for name in self.name:
-            loss = self.factory_loss(pred, gt, name, warmup)
+            loss = self.factory_loss(pred, gt, name)
             if torch.isnan(loss):
                 raise ValueError('Loss is nan during training...')
             cur_loss.append(loss)

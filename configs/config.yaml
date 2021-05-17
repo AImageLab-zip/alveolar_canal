@@ -4,8 +4,8 @@ tb_dir: 'Y:\work\runs'
 seed: 47
 # model configuration
 model:
-  # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale
-  name: UNet3D
+  # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale, transUNet3D
+  name: transUNet3D
   sharding: False
 
 # trainer configuration
@@ -43,12 +43,13 @@ data-loader:
   # data loaders configuration
   batch_size: 1
   num_workers: 0
+  split_filepath: 'Y:\work\projects\alveolar_canal_3Dtraining\configs\fake_split.json'
   file_paths: 'Y:\work\datasets\maxillo\VOLUMES\'
 
   # create arch line and set to zero all the values out of the arch
   background_suppression: False
-  mean: 0.4276
-  std: 0.1615
+  mean: 0.08435
+  std: 0.17885
   weights:
     - 7.03e-04
     - 9.99e-01
@@ -57,9 +58,9 @@ data-loader:
 
   # KEEP IN MIND: SCALE RATIOS SHOULD BE AROUND (0.4568, 0.8733, 1)
   resize_shape:
-    - 64
-    - 128
-    - 144
+    - 136
+    - 280
+    - 304
 
 #  labels:
 #    UNLABELED: 3
@@ -73,5 +74,5 @@ data-loader:
 
   split_volumes:
     - 1
-    - 1
+    - 5
     - 2

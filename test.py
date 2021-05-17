@@ -14,10 +14,10 @@ def test(model, test_loader, splitter, epoch, evaluator, dumper=None, final_mean
     model.eval()
     with torch.no_grad():
         evaluator.reset_eval()
-        for i, (images, labels, names) in tqdm(enumerate(test_loader), total=len(test_loader), desc='val epoch {}'.format(str(epoch))):
+        for i, (images, labels, names, emb_codes) in tqdm(enumerate(test_loader), total=len(test_loader), desc='val epoch {}'.format(str(epoch))):
 
             images = images.cuda()  # BS, 3, Z, H, W
-            output = model(images)  # BS, Classes, Z, H, W
+            output = model(images, emb_codes)  # BS, Classes, Z, H, W
 
             whole_image += list(images.cpu())
             whole_labels += labels
@@ -58,7 +58,6 @@ def test(model, test_loader, splitter, epoch, evaluator, dumper=None, final_mean
                 images = images.numpy()
 
                 evaluator.iou(output, labels)
-
                 if dumper is not None:
                     dumper.dump(labels, output, images, name.pop(), score=evaluator.metric_list[-1])
                     patient_count += 1
