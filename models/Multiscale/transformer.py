@@ -137,7 +137,7 @@ class ViT(nn.Module):
 
 
 class ViT_positional(nn.Module):
-    def __init__(self, *, dim, depth, heads, pool = 'cls', n_maps=64, dim_head=64, dropout=0., emb_dropout=0.1, pos_shape):
+    def __init__(self, *, dim, depth, heads, pool = 'cls', n_maps=64, dim_head=64, dropout=0., emb_dropout=0.1):
         super().__init__()
 
         # assert image_size % patch_size == 0, 'Image dimensions must be divisible by the patch size.'
@@ -158,7 +158,8 @@ class ViT_positional(nn.Module):
             nn.Linear(dim, dim),
         )
 
-        self.pos_embedding = nn.Parameter(torch.randn(pos_shape))
+        # self.pos_embedding = nn.Parameter(torch.randn(pos_shape))
+
         self.dropout = nn.Dropout(emb_dropout)
 
         self.transformer = Transformer(dim, depth, heads, dim_head, dim, dropout)
@@ -166,12 +167,12 @@ class ViT_positional(nn.Module):
         self.pool = pool
         self.to_latent = Rearrange('b c (z h w) -> b c z h w', z=Z, h=H, w=W)
 
-    def forward(self, img, positions, mask = None):
+    def forward(self, img, pos_embedding, mask = None):
         x = self.to_patch_embedding(img)
         b, n, _ = x.shape
 
         # cls_tokens = repeat(self.cls_token, '() n d -> b n d', b = b)
-        pos_embedding = torch.index_select(self.pos_embedding, index=positions, dim=0)
+        # pos_embedding = torch.index_select(self.pos_embedding, index=positions, dim=0)
         # x = torch.cat((pos_embedding, x), dim=1)
         x += pos_embedding
 

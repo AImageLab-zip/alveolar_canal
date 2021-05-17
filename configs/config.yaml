@@ -62,6 +62,11 @@ data-loader:
     - 280
     - 304
 
+  patch_shape:
+    - 136
+    - 56
+    - 80
+
 #  labels:
 #    UNLABELED: 3
 #    BACKGROUND: 2
@@ -71,8 +76,3 @@ data-loader:
   labels:
     BACKGROUND: 0
     INSIDE: 1
-
-  split_volumes:
-    - 1
-    - 5
-    - 2

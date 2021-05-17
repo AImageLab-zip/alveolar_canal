@@ -288,25 +288,20 @@ class NewLoader():
 
         for partition, folders in folder_splits.items():
             for patient_num, folder in tqdm(enumerate(folders), total=len(folders)):
+
+                data_path = os.path.join(config['file_paths'], folder, 'data.npy')
+                gt_path = os.path.join(config['file_paths'], folder, gt_filename)
+
                 if config.get('use_dicom', False):
                     data = Jaw(os.path.join(config['file_paths'], folder, 'DICOM', 'DICOMDIR')).get_volume()
                 else:
-                    data = np.load(os.path.join(config['file_paths'], folder, 'data.npy'))
-                gt = np.load(os.path.join(config['file_paths'], folder, gt_filename))
+                    data = np.load(data_path)
 
+                gt = np.load(gt_path)
                 assert np.max(data) > 1  # data should not be normalized by default
 
-                data, gt = self.preprocessing(data, gt, folder, partition=partition)
-
-                if data.ndim == 3: data = data.reshape(1, *data.shape)
-                if gt.ndim == 3: gt = gt.reshape(1, *gt.shape)
-
                 self.subjects[partition].append(
-                    tio.Subject(
-                        data=tio.ScalarImage(tensor=data),
-                        label=tio.LabelMap(tensor=gt),
-                        name=folder
-                    )
+                    self.preprocessing(data, gt, infos=(data_path, gt_path, folder, partition))
                 )
 
         if self.mean is None or self.std is None:
@@ -329,7 +324,9 @@ class NewLoader():
     def get_weights(self):
         return self.weights
 
-    def preprocessing(self, data, gt, folder, partition='train'):
+    def preprocessing(self, data, gt, infos):
+
+        data_path, gt_path, folder, partition = infos
 
         # rescale
         data = np.clip(data, self.dicom_min, self.dicom_max)
@@ -351,16 +348,45 @@ class NewLoader():
 
         data = Rescale(size=self.reshape_size)(data)
 
+        # creating channel axis and making it RGB
+        if data.ndim == 3: data = np.tile(data.reshape(1, *data.shape), (3, 1, 1, 1))
+
         if partition == 'train':
             gt = CenterPad(new_shape)(gt)
             gt = Rescale(size=self.reshape_size, interp_fn='nearest')(gt)
+            if gt.ndim == 3: gt = gt.reshape(1, *gt.shape)
+            return tio.Subject(
+                data=tio.ScalarImage(tensor=data),
+                label=tio.LabelMap(tensor=gt),
+                gt_path=gt_path,
+                data_path=data_path,
+                folder=folder
+            )
 
-        return data, gt
+        return tio.Subject(
+            data=tio.ScalarImage(tensor=data),
+            gt_path=gt_path,
+            data_path=data_path,
+            folder=folder
+        )
+
+    def get_aggregator(self):
+        sampler = self.get_grid_sampler()
+        return tio.inference.GridAggregator(sampler)
+
+    def get_grid_sampler(self):
+        patch_shape = self.config['patch_shape']
+        return tio.GridSampler(patch_size=patch_shape, patch_overlap=0)
 
     def split_dataset(self):
         train = tio.SubjectsDataset(self.subjects['train'], transform=self.transform)
-        test = tio.SubjectsDataset(self.subjects['test'])
-        val = tio.SubjectsDataset(self.subjects['val'])
+        patch_shape = self.config['patch_shape']
+        test = [tio.GridSampler(subject, patch_size=patch_shape, patch_overlap=0) for subject in self.subjects['test']]
+        val = [tio.GridSampler(subject, patch_size=patch_shape, patch_overlap=0) for subject in self.subjects['val']]
+
+        # TODO: grid sampling: might be interesting to make some test with overlapping!
+        # TODO: check if grid or weight sampling is selected for the training data. assuming grid right now.
+
         return train, test, val
 
     def class_freq(self):

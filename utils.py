@@ -144,21 +144,14 @@ def load_config_yaml(config_file):
 def load_model(model_config, loader_config):
 
     num_classes = 1 if len(loader_config['labels']) <= 2 else len(loader_config['labels'])
-    embedding = (
-        np.prod(loader_config['split_volumes']),
-        1,
-        *(np.asarray(loader_config['resize_shape']) / (8 * np.asarray(loader_config['split_volumes']))).astype(int)
-    )
     name = model_config.get('name', 'UNet3D')
-
+    emb_shape = [dim // 8 for dim in loader_config['patch_shape']]
     if name == 'UNet3D':
         if model_config.get('sharding', False):
             return padUNet3DMulti(num_classes)
         return padUNet3D(n_classes=num_classes)
-    elif name == 'PositionalUNet3D':
-        return PospadUNet3D(n_classes=num_classes, emb_shape=embedding)
     elif name == 'transUNet3D':
-        return TransUNet3D(n_classes=num_classes, emb_shape=embedding)
+        return TransUNet3D(n_classes=num_classes, emb_shape=emb_shape)
     elif name == 'Multiscale':
         return Multiscale3D(num_classes=num_classes)
     elif model_config['name'] == 'RESNET18':

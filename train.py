@@ -2,17 +2,21 @@ import torch
 import logging
 from tqdm import tqdm
 from torch import nn
-
+import torchio as tio
 
 def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator):
 
     model.train()
     evaluator.reset_eval()
     losses = []
-    for i, (images, labels, _, emb_codes) in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
+    for i, (d) in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
 
-        images = images.cuda()
-        labels = labels.cuda()
+        images = d['data'][tio.DATA].cuda()
+        labels = d['label'][tio.DATA].cuda()
+        emb_codes = torch.cat((
+            d['index_ini'],
+            d['index_ini'] + torch.as_tensor(images.shape[-3:])
+        ), dim=1).float().cuda()
 
         optimizer.zero_grad()
 

@@ -75,60 +75,22 @@ def main(experiment_name):
 
     evaluator = Evaluator(loader_config)
 
-    # l = NewLoader(loader_config)
-    # patch_size = (136, 56, 151)
-    # train, _, _ = l.split_dataset()
-    # train_queue = tio.Queue(
-    #     train,
-    #     max_length=16,  # queue len
-    #     samples_per_volume=4,
-    #     sampler=tio.data.UniformSampler(patch_size),
-    #     num_workers=0,
-    # )
-    #
-    # ds = DataLoader(train_queue, batch_size=2)
-    # for d in ds:
-    #     data = d['data'][tio.DATA]
-    #     label = d['label'][tio.DATA]
-    #
-    # ds = DataLoader(test, batch_size=2)
-    # for d in ds:
-    #     data = d['data'][tio.DATA]
-    #     label = d['label'][tio.DATA]
-
-
-    alveolar_data = AlveolarDataloader(config=loader_config)
-    train_id, test_id, val_id = alveolar_data.split_dataset()
-
-    train_loader = data.DataLoader(
-        alveolar_data,
-        batch_size=loader_config['batch_size'],
-        sampler=SubsetRandomSampler(train_id),
+    data_utils = NewLoader(loader_config)
+    train_d, test_d, val_d = data_utils.split_dataset()
+    train_queue = tio.Queue(
+        train_d,
+        max_length=16,  # queue len
+        samples_per_volume=4,
+        sampler=data_utils.get_grid_sampler(),
         num_workers=loader_config['num_workers'],
-        pin_memory=True,
-        drop_last=True,
-    )
-    test_loader = data.DataLoader(
-        alveolar_data,
-        batch_size=loader_config['batch_size'],
-        sampler=test_id,
-        num_workers=loader_config['num_workers'],
-        pin_memory=True,
-        drop_last=False,
-        collate_fn=alveolar_data.custom_collate
     )
 
-    val_loader = data.DataLoader(
-        alveolar_data,
-        batch_size=loader_config['batch_size'],
-        sampler=val_id,
-        num_workers=loader_config['num_workers'],
-        pin_memory=True,
-        drop_last=False,
-        collate_fn=alveolar_data.custom_collate
-    )
+    train_loader = data.DataLoader(train_queue, loader_config['batch_size'], num_workers=loader_config['num_workers'])
+    test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for test_p in test_d]
 
-    loss = LossFn(config.get('loss'), loader_config, weights=alveolar_data.get_weights())
+    val_loader = [(val_p, data.DataLoader(val_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for val_p in val_d]
+
+    loss = LossFn(config.get('loss'), loader_config, weights=None)  # TODO: fix this, weights are disabled now
 
     start_epoch = 0
     if train_config['checkpoint_path'] is not None:
@@ -156,7 +118,7 @@ def main(experiment_name):
 
             epoch_loss, _ = train(model, train_loader, loss, optimizer, epoch, writer, evaluator)
 
-            val_metric = test(model, val_loader, alveolar_data.get_splitter(), epoch, evaluator)
+            val_metric = test(model, val_loader, epoch, evaluator)
             writer.add_scalar('Metric/validation', val_metric, epoch)
             logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric: {val_metric} - LR: {optimizer.param_groups[0]["lr"]}')
 
@@ -189,17 +151,17 @@ def main(experiment_name):
                 torch.save(state, os.path.join(project_dir, 'checkpoints', 'debug.pth'))
 
             if epoch % 5 == 0:
-                test_score = test(model, test_loader, alveolar_data.get_splitter(), train_config['epochs'] + 1, evaluator)
+                test_score = test(model, test_loader, train_config['epochs'] + 1, evaluator)
                 logging.info(f'TEST Epoch [{epoch}] - Mean Metric: {test_score} - LR: {optimizer.param_groups[0]["lr"]}')
                 writer.add_scalar('Metric/Test', test_score, epoch)
 
         logging.info('BEST METRIC IS {}'.format(best_metric))
 
     # final test
-    test_scores = test(model, test_loader, alveolar_data.get_splitter(), train_config['epochs'] + 1, evaluator, dumper=vol_writer, final_mean=False)
+    test_scores = test(model, test_loader, train_config['epochs'] + 1, evaluator, dumper=vol_writer, final_mean=False)
     logging.info(f'final metric list: {test_scores}')
     logging.info(f'FINAL TEST - Mean Metric: {np.mean(test_scores)}')
-    if vol_writer is None:
+    if vol_writer is not None:
         logging.info("going to create zip archive. wait the end of the run pls")
         vol_writer.save_zip()
 

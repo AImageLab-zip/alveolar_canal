@@ -8,17 +8,15 @@ class TransUNet3D(nn.Module):
     def __init__(self, n_classes, emb_shape):
         self.n_classes = n_classes
         super(TransUNet3D, self).__init__()
-        pos_size, _, Z, H, W = emb_shape
+        Z, H, W = emb_shape
 
         emb_channels = 512
-        emb_voxels = Z * H * W
 
         # replace 1 with emb_voxel and emb_channels with 1 to have a weight for each emb_voxel instead of channels
-        pos_emb_shape = (pos_size, emb_channels, 1)
+        self.pos_emb_layer = nn.Linear(6, emb_channels)  # (pos_size, emb_channels, 1)
 
         self.attention = ViT_positional(
             dim=(Z, H, W),
-            pos_shape=pos_emb_shape,
             depth=6,
             heads=16,
             dropout=0.1,
@@ -71,7 +69,9 @@ class TransUNet3D(nn.Module):
         h = self.ec6(h)
         h = self.ec7(h)
 
-        h = self.attention(h, position)
+        pos_emb = self.pos_emb_layer(position)
+        h = self.attention(h, pos_emb.view(1, -1, 1))
+
         h = torch.cat((self.dc9(h), feat_2), dim=1)
 
         h = self.dc8(h)
