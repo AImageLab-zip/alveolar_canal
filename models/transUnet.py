@@ -70,7 +70,7 @@ class TransUNet3D(nn.Module):
         h = self.ec7(h)
 
         pos_emb = self.pos_emb_layer(position)
-        h = self.attention(h, pos_emb.view(1, -1, 1))
+        h = self.attention(h, pos_emb.view(*pos_emb.shape, 1))
 
         h = torch.cat((self.dc9(h), feat_2), dim=1)
 

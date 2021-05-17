@@ -378,12 +378,14 @@ class NewLoader():
         patch_shape = self.config['patch_shape']
         if type == 'grid':
             return tio.GridSampler(patch_size=patch_shape, patch_overlap=overlap)
-        else:
+        elif type=='by_label':
             return tio.LabelSampler(
                 patch_size=patch_shape,
                 label_name='label',
                 label_probabilities={self.config['labels']['BACKGROUND']: 0.1, self.config['labels']['INSIDE']: 0.9}
             )
+        else:
+            raise Exception('no valid sampling type provided')
 
     def split_dataset(self):
         train = tio.SubjectsDataset(self.subjects['train'], transform=self.transform)

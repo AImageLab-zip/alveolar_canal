@@ -78,17 +78,22 @@ def main(experiment_name):
     data_utils = NewLoader(loader_config)
     train_d, test_d, val_d = data_utils.split_dataset()
 
+    # if not specified we samples the maximum number of times patchshape fits resizeshape along all dimensions
+    samples_per_volume = loader_config.get(
+        'samples_per_volume',
+        int(np.round(np.max([i/j for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])])))
+    )
+
     train_queue = tio.Queue(
         train_d,
         max_length=16,  # queue len
-        samples_per_volume=4,
+        samples_per_volume=samples_per_volume,
         sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'), loader_config.get('grid_overlap', 0)),
-        num_workers=loader_config['num_workers'],
+        num_workers=0,
     )
-
     train_loader = data.DataLoader(train_queue, loader_config['batch_size'], num_workers=loader_config['num_workers'])
-    test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for test_p in test_d]
 
+    test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for test_p in test_d]
     val_loader = [(val_p, data.DataLoader(val_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for val_p in val_d]
 
     loss = LossFn(config.get('loss'), loader_config, weights=None)  # TODO: fix this, weights are disabled now
@@ -149,7 +154,7 @@ def main(experiment_name):
                     'optimizer': optimizer.state_dict(),
                     'metric': val_metric
                 }
-                torch.save(state, os.path.join(project_dir, 'checkpoints', 'debug.pth'))
+                torch.save(state, os.path.join(project_dir, 'checkpoints', 'last.pth'))
 
             if epoch % 5 == 0:
                 test_score = test(model, test_loader, train_config['epochs'] + 1, evaluator)

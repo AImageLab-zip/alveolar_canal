@@ -42,9 +42,9 @@ lr_scheduler:
 data-loader:
   # data loaders configuration
   batch_size: 4
-  num_workers: 0
+  num_workers: 4
   # split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
-  split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
+  split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/fake_split.json'
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
 
   # create arch line and set to zero all the values out of the arch
@@ -64,21 +64,30 @@ data-loader:
 
   # KEEP IN MIND: SCALE RATIOS SHOULD BE AROUND (0.4568, 0.8733, 1)
   resize_shape:
-    - 136
-    - 256
-    - 304
+#    - 136
+#    - 256
+#    - 304
+    - 209
+    - 335
+    - 384
 
-#  labels:
-#    UNLABELED: 3
-#    BACKGROUND: 2
-#    INSIDE: 1
-#    CONTOUR: 0
+  patch_shape:
+#    - 136
+#    - 56
+#    - 80
+    - 80
+    - 80
+    - 80
+
+  samples_per_volume: 16
+  sampler_type: by_label # valid types: grid, by_label
 
   labels:
     BACKGROUND: 0
     INSIDE: 1
 
-  split_volumes:
-    - 1
-    - 8
-    - 2
+  #      labels:
+  #        UNLABELED: 3
+  #        BACKGROUND: 2
+  #        INSIDE: 1
+  #        CONTOUR: 0
