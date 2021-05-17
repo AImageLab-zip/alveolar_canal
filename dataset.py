@@ -371,12 +371,19 @@ class NewLoader():
         )
 
     def get_aggregator(self):
-        sampler = self.get_grid_sampler()
+        sampler = self.get_sampler()
         return tio.inference.GridAggregator(sampler)
 
-    def get_grid_sampler(self):
+    def get_sampler(self, type, overlap=0):
         patch_shape = self.config['patch_shape']
-        return tio.GridSampler(patch_size=patch_shape, patch_overlap=0)
+        if type == 'grid':
+            return tio.GridSampler(patch_size=patch_shape, patch_overlap=overlap)
+        else:
+            return tio.LabelSampler(
+                patch_size=patch_shape,
+                label_name='label',
+                label_probabilities={self.config['labels']['BACKGROUND']: 0.1, self.config['labels']['INSIDE']: 0.9}
+            )
 
     def split_dataset(self):
         train = tio.SubjectsDataset(self.subjects['train'], transform=self.transform)

@@ -77,11 +77,12 @@ def main(experiment_name):
 
     data_utils = NewLoader(loader_config)
     train_d, test_d, val_d = data_utils.split_dataset()
+
     train_queue = tio.Queue(
         train_d,
         max_length=16,  # queue len
         samples_per_volume=4,
-        sampler=data_utils.get_grid_sampler(),
+        sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'), loader_config.get('grid_overlap', 0)),
         num_workers=loader_config['num_workers'],
     )
 

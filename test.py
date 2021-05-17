@@ -9,8 +9,6 @@ import torchio as tio
 
 def test(model, test_loader, epoch, evaluator, dumper=None, final_mean=True):
 
-    whole_image, whole_labels, whole_output, whole_names = [], [], [], []
-    patient_count = 0
     model.eval()
 
     with torch.no_grad():
@@ -50,14 +48,10 @@ def test(model, test_loader, epoch, evaluator, dumper=None, final_mean=True):
                 output = output.squeeze().cpu().detach().numpy()  # BS, Z, H, W
 
             evaluator.iou(output, labels)
+
             if dumper is not None:
                 dumper.dump(labels, output, images, subject[0]['folder'], score=evaluator.metric_list[-1])
-                patient_count += 1
 
-
-
-
-    assert len(whole_output) == 0, "something wrong here"
     if final_mean:
         epoch_val_metric = evaluator.mean_metric()
         return epoch_val_metric

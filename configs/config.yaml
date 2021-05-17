@@ -5,7 +5,7 @@ seed: 47
 # model configuration
 model:
   # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale, transUNet3D
-  name: transUNet3D
+  name: UNet3D
   sharding: False
 
 # trainer configuration
@@ -58,13 +58,20 @@ data-loader:
 
   # KEEP IN MIND: SCALE RATIOS SHOULD BE AROUND (0.4568, 0.8733, 1)
   resize_shape:
-    - 136
-    - 280
-    - 304
+#    - 136
+#    - 280
+#    - 304
+    - 209
+    - 335
+    - 384
+
 
   patch_shape:
-    - 136
-    - 56
+#    - 136
+#    - 56
+#    - 80
+    - 80
+    - 80
     - 80
 
 #  labels:
