@@ -5,7 +5,7 @@ seed: 47
 # model configuration
 model:
   # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale, transUNet3D
-  name: transUNet3D
+  name: UNet3D
   sharding: False
 
 # trainer configuration
@@ -41,7 +41,7 @@ lr_scheduler:
 
 data-loader:
   # data loaders configuration
-  batch_size: 2
+  batch_size: 1
   num_workers: 0
   split_filepath: 'Y:\work\projects\alveolar_canal_3Dtraining\configs\fake_split.json'
   file_paths: 'Y:\work\datasets\maxillo\VOLUMES\'
@@ -70,12 +70,12 @@ data-loader:
 #    - 136
 #    - 56
 #    - 80
-    - 80
-    - 80
-    - 80
+    - 40
+    - 40
+    - 40
 
-  samples_per_volume: 16
-  sampler_type: by_label # valid types: grid, by_label
+  samples_per_volume: 1
+  sampler_type: grid # valid types: grid, by_label
 
 #  labels:
 #    UNLABELED: 3

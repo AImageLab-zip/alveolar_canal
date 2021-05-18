@@ -271,11 +271,11 @@ class NewLoader():
         self.means = []
         self.stds = []
 
-        transforms = [
-            tio.RescaleIntensity(out_min_max=(0, 1)),
-            tio.RandomAffine(),
-        ]
-        self.transform = tio.Compose(transforms)
+        # transforms = [
+        #     tio.RescaleIntensity(out_min_max=(0, 1)),
+        #     tio.RandomAffine(),
+        # ]
+        # self.transform = tio.Compose(transforms)
 
         reshape_size = self.config.get('resize_shape', (152, 224, 256))
         self.reshape_size = tuple(reshape_size) if type(reshape_size) == list else reshape_size
@@ -378,7 +378,7 @@ class NewLoader():
         patch_shape = self.config['patch_shape']
         if type == 'grid':
             return tio.GridSampler(patch_size=patch_shape, patch_overlap=overlap)
-        elif type=='by_label':
+        elif type == 'by_label':
             return tio.LabelSampler(
                 patch_size=patch_shape,
                 label_name='label',
@@ -388,7 +388,7 @@ class NewLoader():
             raise Exception('no valid sampling type provided')
 
     def split_dataset(self):
-        train = tio.SubjectsDataset(self.subjects['train'], transform=self.transform)
+        train = tio.SubjectsDataset(self.subjects['train'])  #, transform=self.transform)
         patch_shape = self.config['patch_shape']
         test = [tio.GridSampler(subject, patch_size=patch_shape, patch_overlap=0) for subject in self.subjects['test']]
         val = [tio.GridSampler(subject, patch_size=patch_shape, patch_overlap=0) for subject in self.subjects['val']]

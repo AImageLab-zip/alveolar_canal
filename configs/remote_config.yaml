@@ -79,7 +79,7 @@ data-loader:
     - 80
     - 80
 
-  samples_per_volume: 16
+  samples_per_volume: 8
   sampler_type: by_label # valid types: grid, by_label
 
   labels:

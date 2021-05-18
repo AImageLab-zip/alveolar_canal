@@ -44,8 +44,3 @@ data-loader:
   weights:
     - 7.03e-04
     - 9.99e-01
-
-  split_volumes:
-    - 2
-    - 2
-    - 3
