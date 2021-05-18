@@ -6,7 +6,7 @@ import torch.utils.data as data
 from torch.utils.data import SubsetRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 import utils
-from dataset import AlveolarDataloader, NewLoader
+from dataset import NewLoader
 from eval import Eval as Evaluator
 from losses import LossFn
 from test import test
@@ -79,10 +79,9 @@ def main(experiment_name):
     train_d, test_d, val_d = data_utils.split_dataset()
 
     # if not specified we samples the maximum number of times patchshape fits resizeshape along all dimensions
-    samples_per_volume = loader_config.get(
-        'samples_per_volume',
-        int(np.round(np.max([i/j for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])])))
-    )
+    samples_per_volume = loader_config.get('samples_per_volume', 'auto')
+    if samples_per_volume == 'auto':
+        samples_per_volume = int(np.round(np.max([i/j for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])])))
 
     train_queue = tio.Queue(
         train_d,
