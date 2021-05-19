@@ -49,7 +49,6 @@ class NewLoader():
         self.reshape_size = tuple(reshape_size) if type(reshape_size) == list else reshape_size
 
         gt_filename = 'gt_4labels.npy' if len(self.config['labels']) > 2 else 'gt_alpha.npy'
-        index = 0
 
         with open(config.get('split_filepath', '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json')) as f:
             folder_splits = json.load(f)
@@ -146,7 +145,9 @@ class NewLoader():
             raise Exception('no valid sampling type provided')
 
     def split_dataset(self):
-        train = tio.SubjectsDataset(self.subjects['train'])
+        train = tio.SubjectsDataset(self.subjects['train'], transform=self.transforms)
+        # logging.info("using the following augmentations: ", train[0].history)
+
         patch_shape = self.config['patch_shape']
         test = [tio.GridSampler(subject, patch_size=patch_shape, patch_overlap=0) for subject in self.subjects['test']]
         val = [tio.GridSampler(subject, patch_size=patch_shape, patch_overlap=0) for subject in self.subjects['val']]

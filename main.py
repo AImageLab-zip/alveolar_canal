@@ -22,6 +22,16 @@ from torch.utils.data import DataLoader
 import torchio as tio
 
 
+def save_weights(epoch, model, optim, score, path):
+    state = {
+        'epoch': epoch,
+        'state_dict': model.state_dict(),
+        'optimizer': optim.state_dict(),
+        'metric': score
+    }
+    torch.save(state, path)
+
+
 def main(experiment_name):
 
     assert torch.cuda.is_available()
@@ -88,12 +98,12 @@ def main(experiment_name):
         max_length=16,  # queue len
         samples_per_volume=samples_per_volume,
         sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'), loader_config.get('grid_overlap', 0)),
-        num_workers=0,
+        num_workers=loader_config['num_workers'],
     )
-    train_loader = data.DataLoader(train_queue, loader_config['batch_size'], num_workers=loader_config['num_workers'])
+    train_loader = data.DataLoader(train_queue, loader_config['batch_size'], num_workers=0)
 
-    test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for test_p in test_d]
-    val_loader = [(val_p, data.DataLoader(val_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for val_p in val_d]
+    test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'], num_workers=0)) for test_p in test_d]
+    val_loader = [(val_p, data.DataLoader(val_p, loader_config['batch_size'], num_workers=0)) for val_p in val_d]
 
     loss = LossFn(config.get('loss'), loader_config, weights=None)  # TODO: fix this, weights are disabled now
 
@@ -125,7 +135,7 @@ def main(experiment_name):
 
             val_metric = test(model, val_loader, epoch, evaluator)
             writer.add_scalar('Metric/validation', val_metric, epoch)
-            logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric: {val_metric} - LR: {optimizer.param_groups[0]["lr"]}')
+            logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric: {val_metric}')
 
             if scheduler is not None:
                 if optim_name == 'SGD' and scheduler_name == 'Plateau':
@@ -135,37 +145,26 @@ def main(experiment_name):
 
             if val_metric > best_metric:
                 best_metric = val_metric
-                state = {
-                    'epoch': epoch,
-                    'state_dict': model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'metric': best_metric
-                }
-                torch.save(state, os.path.join(project_dir, 'best.pth'))
+                save_weights(epoch, model, optimizer, best_metric, os.path.join(project_dir, 'best.pth'))
 
-            if val_metric < 0.0001 and epoch > 10:
+            if val_metric < 1e-05 and epoch > 10:
                 logging.info('drop in performances detected. aborting the experiment')
                 return 0
             else:  # save current weights for debug, overwrite the same file
-                state = {
-                    'epoch': epoch,
-                    'state_dict': model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'metric': val_metric
-                }
-                torch.save(state, os.path.join(project_dir, 'checkpoints', 'last.pth'))
+                save_weights(epoch, model, optimizer, val_metric, os.path.join(project_dir, 'checkpoints', 'last.pth'))
 
-            if epoch % 5 == 0:
+            if epoch % 5 == 0 and epoch != 0:
                 test_score = test(model, test_loader, train_config['epochs'] + 1, evaluator)
-                logging.info(f'TEST Epoch [{epoch}] - Mean Metric: {test_score} - LR: {optimizer.param_groups[0]["lr"]}')
+                logging.info(f'TEST Epoch [{epoch}] - Mean Metric: {test_score}')
                 writer.add_scalar('Metric/Test', test_score, epoch)
 
         logging.info('BEST METRIC IS {}'.format(best_metric))
 
     # final test
     test_scores = test(model, test_loader, train_config['epochs'] + 1, evaluator, dumper=vol_writer, final_mean=False)
-    logging.info(f'final metric list: {test_scores}')
-    logging.info(f'FINAL TEST - Mean Metric: {np.mean(test_scores)}')
+    logging.info(f'FINAL METRIC: {np.mean(test_scores)}')
+    logging.info(f'debug: final metric list: {test_scores}')
+
     if vol_writer is not None:
         logging.info("going to create zip archive. wait the end of the run pls")
         vol_writer.save_zip()

@@ -64,17 +64,11 @@ data-loader:
 
   # KEEP IN MIND: SCALE RATIOS SHOULD BE AROUND (0.4568, 0.8733, 1)
   resize_shape:
-#    - 136
-#    - 256
-#    - 304
     - 209
     - 335
     - 384
 
   patch_shape:
-#    - 136
-#    - 56
-#    - 80
     - 80
     - 80
     - 80

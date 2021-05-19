@@ -162,6 +162,10 @@ def load_model(model_config, loader_config):
         raise Exception("Model not found, check the config.yaml")
 
 
+
+##########################
+#   BACKGROUND SUPPRESSION
+
 def compute_skeleton(img):
     """
     create the skeleton using morphology
@@ -435,6 +439,8 @@ def background_suppression(data, folder):
 
     return data
 
+#   END BACKGROUND SUPPRESSION
+##############################
 
 class Splitter:
     def __init__(self, split):

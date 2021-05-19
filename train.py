@@ -11,7 +11,7 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator):
     losses = []
     for i, (d) in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
 
-        images = d['data'][tio.DATA].cuda()
+        images = d['data'][tio.DATA].float().cuda()
         labels = d['label'][tio.DATA].cuda()
         emb_codes = torch.cat((
             d['index_ini'],
