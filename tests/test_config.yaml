@@ -1,15 +1,16 @@
 output:
-  panorex: false
+  panorex: true
   volume_overview: true
-  side_cuts: false
+  side_cuts: true
+  teeth: false
 
 directories:
   test_folders:
-#    - P102
+    - P102
     - P114
-#    - P119
-#    - P139
-#    - P23
+    - P119
+    - P139
+    - P23
     - P30
 #    - P32
 #    - P33
@@ -22,7 +23,7 @@ directories:
 #    - P97
 
   dataset_folder: 'Y:\work\datasets\maxillo\VOLUMES'
-  data_folder: 'C:\Users\marco\Desktop\numpy'
+  data_folder: 'C:\Users\marco\Desktop\numpy_torchio\numpy'
 
 experiment:
-    title: 'teeth_2'
+    title: 'torchio'

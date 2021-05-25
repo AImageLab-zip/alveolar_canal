@@ -38,7 +38,7 @@ def set_nested_item(dataDict, mapList, val):
 if __name__ == '__main__':
 
     df = pd.read_excel(EXCELL_PATH)
-    config = utils.load_config_yaml(path.join('configs', 'base_config.yaml'))  # load base config
+    config = utils.load_config_yaml(path.join('configs', 'base', 'base_config.yaml'))  # load base config
     titles = []
     yaml_dirs = []
     for i, r in df[df.todo.eq(True)].iterrows():

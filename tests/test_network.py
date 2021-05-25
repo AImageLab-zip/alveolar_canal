@@ -23,12 +23,14 @@ def write_text(image, text, position, size=0.4, font=cv2.FONT_HERSHEY_SIMPLEX):
 
 def snapshot(jaw, title, teeth):
     fig = mlab.figure(size=(700,700))
-    teeth = np.swapaxes(teeth, 0, 2)
+
     gt = np.swapaxes(jaw.get_gt_volume(), 0, 2)
     data = np.swapaxes(jaw.get_volume(normalized=True), 0, 2)
     mlab.contour3d(data, color=(0.5, 0.5, 0.5), opacity=.3, contours=3,  figure=fig)
     mlab.contour3d(gt, color=(1, 0, 0), figure=fig)
-    mlab.contour3d(teeth, color=(0, 0, 0), figure=fig)
+    if teeth is not None:
+        teeth = np.swapaxes(teeth, 0, 2)
+        mlab.contour3d(teeth, color=(0, 0, 0), figure=fig)
     mlab.text(color=(0, 0, 0), y=.9, x=0.4, width=.3, text=title, figure=fig)
 
     angles = np.arange(0, 360)
@@ -68,6 +70,7 @@ if __name__ == '__main__':
     do_panorex = config['output'].get('panorex', True)
     do_sides = config['output'].get('side_cuts', True)
     do_3D = config['output'].get('volume_overview', True)
+    include_teeth = config['output'].get('volume_overview', True)
 
     for i, (folder) in enumerate(patient_folders):
 
@@ -92,8 +95,10 @@ if __name__ == '__main__':
 
         pathlib.Path(os.path.join(folder_name, str(folder))).mkdir(parents=True, exist_ok=True)
 
-        teeth = find_teeth(jaw)
-        teeth = np.flip(teeth, 0)
+        teeth = None
+        if include_teeth:
+            teeth = find_teeth(jaw)
+            teeth = np.flip(teeth, 0)
 
         # PANOREX AND SIDE CUTS FROM THE ORIGINAL ANNOTATION
         panorex = []

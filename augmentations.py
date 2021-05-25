@@ -7,7 +7,6 @@ import torchvision.transforms.functional as TF
 import cv2
 from torch.nn.functional import interpolate
 
-
 class ToPilImage:
 
     def __init__(self):

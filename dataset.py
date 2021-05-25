@@ -9,10 +9,8 @@ import json
 from tqdm import tqdm
 from Jaw import Jaw
 import logging
-from utils import Splitter
-from itertools import compress
-
 import torchio as tio
+import utils
 
 class NewLoader():
 
@@ -29,21 +27,11 @@ class NewLoader():
         self.dicom_max = config.get('volumes_max', 2100)
         self.dicom_min = config.get('volumes_min', 0)
 
-        self.transforms = tio.Compose([
-            tio.ZNormalization(),
-            tio.OneOf([
-                tio.RandomAffine(
-                    scales=(0.8, 1.2),
-                    degrees=(5, 5),
-                    isotropic=True,
-                    image_interpolation='linear',
-                    p=0.5
-                ),
-                tio.RandomElasticDeformation(num_control_points=7, p=0.5)
-            ]),
-            tio.RandomFlip(axes=2, flip_probability=0.5),
-            tio.transforms.RandomBlur(p=0.1)
-        ])
+        aug_filepath = config.get("augmentations_file", None)
+        auglist = [] if aug_filepath is None else utils.load_config_yaml(aug_filepath)
+        augment = AugFactory(auglist)
+        augment.log()  # write what we are using to logfile
+        self.transforms = augment.get_transform()
 
         reshape_size = self.config.get('resize_shape', (152, 224, 256))
         self.reshape_size = tuple(reshape_size) if type(reshape_size) == list else reshape_size
@@ -222,3 +210,38 @@ class NewLoader():
                 not_class_pixel_count[l] += np.sum(np.in1d(gt, [v for v in valid_labels if v != l]))
 
         return not_class_pixel_count / (class_pixel_count + 1e-06)
+
+
+class AugFactory:
+    def __init__(self, aug_list):
+        self.aug_list = aug_list
+        self.transforms = self.factory(self.aug_list, [])
+
+    def log(self):
+        """
+        save the list of aug for this experiment to the default log file
+        :param path:
+        :return:
+        """
+        logging.info('going to use the following augmentations:: %s', self.aug_list)
+
+    def factory(self, auglist, transforms):
+        for aug in auglist:
+            if aug == 'OneOf':
+                transforms.append(tio.OneOf(self.factory(auglist[aug], [])))
+            else:
+                try:
+                    kwargs = {}
+                    for param, value in auglist[aug].items():
+                        kwargs[param] = value
+                    transforms.append(getattr(tio, aug)(**kwargs))
+                except:
+                    raise Exception(f"this transform is not valid: {aug}")
+        return transforms
+
+    def get_transform(self):
+        """
+        return the transform object
+        :return:
+        """
+        return tio.Compose(self.transforms)

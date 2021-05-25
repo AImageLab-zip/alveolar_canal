@@ -1,0 +1,17 @@
+ZNormalization:
+  p: 1
+OneOf:
+  RandomAffine:
+    scales: !!python/tuple [0.8, 1.2]
+    degrees: !!python/tuple [5, 5]
+    isotropic: true
+    image_interpolation: linear
+    p: 0.5
+  RandomElasticDeformation:
+      num_control_points: 7
+      p: 0.5
+RandomFlip:
+  axes: 2
+  flip_probability: 0.5
+RandomBlur:
+  p: 0.1

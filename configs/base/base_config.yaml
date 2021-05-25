@@ -32,9 +32,10 @@ trainer:
   validate_after_iters: 2
 
 data-loader:
-  num_workers: 8
+  num_workers: 4
   split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
+  augmentations_file: "/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/base/base_augmentations.yaml"
 
   volumes_min: 0
 

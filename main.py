@@ -47,7 +47,7 @@ def main(experiment_name):
 
     model = utils.load_model(
         model_config,
-        loader_config,
+        config
     )
 
     ngpus = torch.cuda.device_count()
@@ -88,22 +88,25 @@ def main(experiment_name):
     data_utils = NewLoader(loader_config)
     train_d, test_d, val_d = data_utils.split_dataset()
 
-    # if not specified we samples the maximum number of times patchshape fits resizeshape along all dimensions
-    samples_per_volume = loader_config.get('samples_per_volume', 'auto')
-    if samples_per_volume == 'auto':
-        samples_per_volume = int(np.round(np.max([i/j for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])])))
+    # TODO: more a warning. samples per volume by params is disabled now and automatically computed.
+    #  we need to further investigate damages caused by a wrong number here
+    # samples_per_volume = loader_config.get('samples_per_volume', 'auto')
+    # if samples_per_volume == 'auto':
+    #     samples_per_volume = int(np.prod([np.round(i / j) for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])]))
+    # samples_per_volume = int(samples_per_volume)
+    samples_per_volume = int(np.prod([np.round(i / j) for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])]))
 
     train_queue = tio.Queue(
         train_d,
-        max_length=16,  # queue len
+        max_length=samples_per_volume * 4,  # queue len
         samples_per_volume=samples_per_volume,
         sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'), loader_config.get('grid_overlap', 0)),
         num_workers=loader_config['num_workers'],
     )
     train_loader = data.DataLoader(train_queue, loader_config['batch_size'], num_workers=0)
 
-    test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'], num_workers=0)) for test_p in test_d]
-    val_loader = [(val_p, data.DataLoader(val_p, loader_config['batch_size'], num_workers=0)) for val_p in val_d]
+    test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for test_p in test_d]
+    val_loader = [(val_p, data.DataLoader(val_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for val_p in val_d]
 
     loss = LossFn(config.get('loss'), loader_config, weights=None)  # TODO: fix this, weights are disabled now
 
@@ -133,37 +136,37 @@ def main(experiment_name):
 
             epoch_loss, _ = train(model, train_loader, loss, optimizer, epoch, writer, evaluator)
 
-            val_metric = test(model, val_loader, epoch, evaluator)
-            writer.add_scalar('Metric/validation', val_metric, epoch)
-            logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric: {val_metric}')
+            val_iou, val_dice = test(model, val_loader, epoch, evaluator)
+            writer.add_scalar('Metric/validation', val_iou, epoch)
+            logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric (iou): {val_iou} - (dice) {val_dice}')
 
             if scheduler is not None:
                 if optim_name == 'SGD' and scheduler_name == 'Plateau':
-                    scheduler.step(val_metric)
+                    scheduler.step(val_iou)
                 else:
                     scheduler.step(epoch)
 
-            if val_metric > best_metric:
-                best_metric = val_metric
+            if val_iou > best_metric:
+                best_metric = val_iou
                 save_weights(epoch, model, optimizer, best_metric, os.path.join(project_dir, 'best.pth'))
 
-            if val_metric < 1e-05 and epoch > 10:
+            if val_iou < 1e-05 and epoch > 10:
                 logging.info('drop in performances detected. aborting the experiment')
                 return 0
             else:  # save current weights for debug, overwrite the same file
-                save_weights(epoch, model, optimizer, val_metric, os.path.join(project_dir, 'checkpoints', 'last.pth'))
+                save_weights(epoch, model, optimizer, val_iou, os.path.join(project_dir, 'checkpoints', 'last.pth'))
 
             if epoch % 5 == 0 and epoch != 0:
-                test_score = test(model, test_loader, train_config['epochs'] + 1, evaluator)
-                logging.info(f'TEST Epoch [{epoch}] - Mean Metric: {test_score}')
-                writer.add_scalar('Metric/Test', test_score, epoch)
+                test_iou, test_dice = test(model, test_loader, train_config['epochs'] + 1, evaluator)
+                logging.info(f'TEST Epoch [{epoch}] - Mean Metric (iou): {test_iou} - (dice) {test_dice}')
+                writer.add_scalar('Metric/Test', test_iou, epoch)
 
         logging.info('BEST METRIC IS {}'.format(best_metric))
 
     # final test
-    test_scores = test(model, test_loader, train_config['epochs'] + 1, evaluator, dumper=vol_writer, final_mean=False)
-    logging.info(f'FINAL METRIC: {np.mean(test_scores)}')
-    logging.info(f'debug: final metric list: {test_scores}')
+    final_iou_list = test(model, test_loader, train_config['epochs'] + 1, evaluator, dumper=vol_writer, skip_mean=True)
+    logging.info(f'FINAL METRIC (iou): {np.mean(final_iou_list)}')
+    logging.info(f'debug: final metric list: {final_iou_list}')
 
     if vol_writer is not None:
         logging.info("going to create zip archive. wait the end of the run pls")

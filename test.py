@@ -7,14 +7,14 @@ import numpy as np
 import torchio as tio
 
 
-def test(model, test_loader, epoch, evaluator, dumper=None, final_mean=True):
+def test(model, test_loader, epoch, evaluator, dumper=None, skip_mean=False):
 
     model.eval()
 
     with torch.no_grad():
         evaluator.reset_eval()
         for i, (subject, loader) in tqdm(enumerate(test_loader), total=len(test_loader), desc='val epoch {}'.format(str(epoch))):
-            aggr = tio.inference.GridAggregator(subject)
+            aggr = tio.inference.GridAggregator(subject, overlap_mode='average')
             for subvolume in loader:
                 images = subvolume['data'][tio.DATA].float().cuda()  # BS, 3, Z, H, W
                 emb_codes = subvolume[tio.LOCATION].float().cuda()
@@ -47,13 +47,13 @@ def test(model, test_loader, epoch, evaluator, dumper=None, final_mean=True):
                 output[output != 1] = 0
                 output = output.squeeze().cpu().detach().numpy()  # BS, Z, H, W
 
-            evaluator.iou(output, labels)
+            evaluator.compute_metrics(output, labels)
 
             if dumper is not None:
                 dumper.dump(labels, output, images, subject[0]['folder'], score=evaluator.metric_list[-1])
 
-    if final_mean:
-        epoch_val_metric = evaluator.mean_metric()
-        return epoch_val_metric
+    if skip_mean:
+        return evaluator.iou_list
     else:
-        return evaluator.metric_list
+        epoch_iou, epoch_dice = evaluator.mean_metric()
+        return epoch_iou, epoch_dice

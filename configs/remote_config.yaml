@@ -18,7 +18,7 @@ trainer:
   # how many iterations between validations
   validate_after_iters: 2
   # max number of epochs
-  epochs: 100
+  epochs: 3
 
 # optimizer configuration
 optimizer:
@@ -33,7 +33,7 @@ optimizer:
 loss:
   # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss, Jaccard
   name:
-    - Jaccard
+    - DiceLoss
 
 lr_scheduler:
   # MultiStepLR, Plateau, null, ...
@@ -41,11 +41,12 @@ lr_scheduler:
 
 data-loader:
   # data loaders configuration
-  batch_size: 4
-  num_workers: 4
+  batch_size: 2
+  num_workers: 8
   # split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
   split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/fake_split.json'
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
+  augmentations_file: "/homes/mcipriano/sbatch_scripts/augmentations_files/6.yaml"
 
   # create arch line and set to zero all the values out of the arch
   background_suppression: False
@@ -64,24 +65,29 @@ data-loader:
 
   # KEEP IN MIND: SCALE RATIOS SHOULD BE AROUND (0.4568, 0.8733, 1)
   resize_shape:
-    - 209
-    - 335
-    - 384
+    - 136
+    - 256
+    - 304
 
   patch_shape:
-    - 80
-    - 80
-    - 80
+    - 120
+    - 120
+    - 120
 
   samples_per_volume: 8
-  sampler_type: by_label # valid types: grid, by_label
+  sampler_type: grid # valid types: grid, by_label
+
+#  labels:
+#    BACKGROUND: 0
+#    INSIDE: 1
+
+#  labels:
+#    UNLABELED: 3
+#    BACKGROUND: 2
+#    INSIDE: 1
+#    CONTOUR: 0
 
   labels:
+    UNLABELED: 2
     BACKGROUND: 0
     INSIDE: 1
-
-  #      labels:
-  #        UNLABELED: 3
-  #        BACKGROUND: 2
-  #        INSIDE: 1
-  #        CONTOUR: 0

@@ -138,14 +138,24 @@ def set_logger(log_path=None):
 
 
 def load_config_yaml(config_file):
-    return yaml.safe_load(open(config_file, 'r'))
+    return yaml.load(open(config_file, 'r'), yaml.FullLoader)
 
 
-def load_model(model_config, loader_config):
+def load_model(model_config, config):
 
-    num_classes = 1 if len(loader_config['labels']) <= 2 else len(loader_config['labels'])
+    model_config = config.get('model')
+    loader_config = config.get('data-loader')
+    loss_config = config.get('loss')
+
+    if 'Jaccard' in loss_config['name'] and len(loader_config['labels']) <= 2:
+        num_classes = 1
+    else:
+        num_classes = len(loader_config['labels'])
+
     name = model_config.get('name', 'UNet3D')
+
     emb_shape = [dim // 8 for dim in loader_config['patch_shape']]
+
     if name == 'UNet3D':
         if model_config.get('sharding', False):
             return padUNet3DMulti(num_classes)

@@ -9,7 +9,7 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator):
     model.train()
     evaluator.reset_eval()
     losses = []
-    for i, (d) in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
+    for i, d in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
 
         images = d['data'][tio.DATA].float().cuda()
         labels = d['label'][tio.DATA].cuda()
@@ -37,17 +37,18 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator):
             outputs = outputs.squeeze().cpu().detach().numpy()  # BS, Z, H, W
 
         labels = labels.cpu().numpy()  # BS, Z, H, W
-        evaluator.iou(outputs, labels)
+        evaluator.compute_metrics(outputs, labels)
 
     epoch_train_loss = sum(losses) / len(losses)
-    epoch_train_metric = evaluator.mean_metric()
+    epoch_iou, epoch_dice= evaluator.mean_metric()
     writer.add_scalar('Loss/train', epoch_train_loss, epoch)
-    writer.add_scalar('Metric/train', epoch_train_metric, epoch)
+    writer.add_scalar('Metric/train', epoch_iou, epoch)
 
     logging.info(
         f'Train Epoch [{epoch}], '
         f'Train Mean Loss: {epoch_train_loss}, '
-        f'Train Mean Metric: {epoch_train_metric}'
+        f'Train Mean Metric (IoU): {epoch_iou}'
+        f'Train Mean Metric (Dice): {epoch_iou}'
     )
 
-    return epoch_train_loss, epoch_train_metric
+    return epoch_train_loss, epoch_iou

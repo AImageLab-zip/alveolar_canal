@@ -45,6 +45,8 @@ data-loader:
   num_workers: 4
   split_filepath: 'Y:\work\projects\alveolar_canal_3Dtraining\configs\fake_split.json'
   file_paths: 'Y:\work\datasets\maxillo\VOLUMES\'
+  # augmentations_file: "Y:\work\projects\alveolar_canal_3Dtraining\configs\base\base_augmentations.yaml"
+  augmentations_file: null
 
   # create arch line and set to zero all the values out of the arch
   background_suppression: False
@@ -58,18 +60,12 @@ data-loader:
 
   # KEEP IN MIND: SCALE RATIOS SHOULD BE AROUND (0.4568, 0.8733, 1)
   resize_shape:
-#    - 136
-#    - 280
-#    - 304
     - 209
     - 335
     - 384
 
 
   patch_shape:
-#    - 136
-#    - 56
-#    - 80
     - 80
     - 80
     - 80
