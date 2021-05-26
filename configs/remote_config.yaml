@@ -76,6 +76,8 @@ data-loader:
 
   samples_per_volume: 8
   sampler_type: grid # valid types: grid, by_label
+  # sparse_dataset: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
+  sparse_dataset: null
 
 #  labels:
 #    BACKGROUND: 0

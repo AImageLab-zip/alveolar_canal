@@ -45,3 +45,8 @@ data-loader:
   weights:
     - 7.03e-04
     - 9.99e-01
+
+  labels:
+    UNLABELED: 2
+    BACKGROUND: 0
+    INSIDE: 1

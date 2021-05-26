@@ -136,7 +136,7 @@ def main(experiment_name):
 
             epoch_loss, _ = train(model, train_loader, loss, optimizer, epoch, writer, evaluator)
 
-            val_iou, val_dice = test(model, val_loader, epoch, evaluator)
+            val_iou, val_dice = test(model, val_loader, epoch, evaluator, loader_config, writer=writer)
             writer.add_scalar('Metric/validation', val_iou, epoch)
             logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric (iou): {val_iou} - (dice) {val_dice}')
 
@@ -157,14 +157,14 @@ def main(experiment_name):
                 save_weights(epoch, model, optimizer, val_iou, os.path.join(project_dir, 'checkpoints', 'last.pth'))
 
             if epoch % 5 == 0 and epoch != 0:
-                test_iou, test_dice = test(model, test_loader, train_config['epochs'] + 1, evaluator)
+                test_iou, test_dice = test(model, test_loader, train_config['epochs'] + 1, evaluator, loader_config, writer=None)
                 logging.info(f'TEST Epoch [{epoch}] - Mean Metric (iou): {test_iou} - (dice) {test_dice}')
                 writer.add_scalar('Metric/Test', test_iou, epoch)
 
         logging.info('BEST METRIC IS {}'.format(best_metric))
 
     # final test
-    final_iou_list = test(model, test_loader, train_config['epochs'] + 1, evaluator, dumper=vol_writer, skip_mean=True)
+    final_iou_list = test(model, test_loader, train_config['epochs'] + 1, evaluator, loader_config, writer=None, dumper=vol_writer, skip_mean=True)
     logging.info(f'FINAL METRIC (iou): {np.mean(final_iou_list)}')
     logging.info(f'debug: final metric list: {final_iou_list}')
 

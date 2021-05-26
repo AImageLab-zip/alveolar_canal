@@ -13,7 +13,7 @@ trainer:
   # path to the checkpoint directory
   checkpoint_path: null
   # skip train or do train?
-  do_train: True
+  do_train: False
   # how many iterations between validations
   validate_after_iters: 2
   # max number of epochs
@@ -32,7 +32,7 @@ optimizer:
 loss:
   # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss, Jaccard
   name:
-    - Jaccard
+    - DiceLoss
 
 lr_scheduler:
   # MultiStepLR, Plateau, null, ...
@@ -45,6 +45,7 @@ data-loader:
   num_workers: 4
   split_filepath: 'Y:\work\projects\alveolar_canal_3Dtraining\configs\fake_split.json'
   file_paths: 'Y:\work\datasets\maxillo\VOLUMES\'
+  sparse_dataset: 'Y:\work\datasets\maxillo\SPARSE'
   # augmentations_file: "Y:\work\projects\alveolar_canal_3Dtraining\configs\base\base_augmentations.yaml"
   augmentations_file: null
 
@@ -64,7 +65,6 @@ data-loader:
     - 335
     - 384
 
-
   patch_shape:
     - 80
     - 80
@@ -79,6 +79,11 @@ data-loader:
 #    INSIDE: 1
 #    CONTOUR: 0
 
+#  labels:
+#    BACKGROUND: 0
+#    INSIDE: 1
+
   labels:
+    UNLABELED: 2
     BACKGROUND: 0
     INSIDE: 1

@@ -40,7 +40,7 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator):
         evaluator.compute_metrics(outputs, labels)
 
     epoch_train_loss = sum(losses) / len(losses)
-    epoch_iou, epoch_dice= evaluator.mean_metric()
+    epoch_iou, epoch_dice = evaluator.mean_metric()
     writer.add_scalar('Loss/train', epoch_train_loss, epoch)
     writer.add_scalar('Metric/train', epoch_iou, epoch)
 
@@ -48,7 +48,7 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator):
         f'Train Epoch [{epoch}], '
         f'Train Mean Loss: {epoch_train_loss}, '
         f'Train Mean Metric (IoU): {epoch_iou}'
-        f'Train Mean Metric (Dice): {epoch_iou}'
+        f'Train Mean Metric (Dice): {epoch_dice}'
     )
 
     return epoch_train_loss, epoch_iou

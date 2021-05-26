@@ -36,7 +36,7 @@ class NewLoader():
         reshape_size = self.config.get('resize_shape', (152, 224, 256))
         self.reshape_size = tuple(reshape_size) if type(reshape_size) == list else reshape_size
 
-        gt_filename = 'gt_4labels.npy' if len(self.config['labels']) > 2 else 'gt_alpha.npy'
+        gt_filename = 'gt_4labels.npy' if 'CONTOUR' in self.config['labels'] else 'gt_alpha.npy'
 
         with open(config.get('split_filepath', '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json')) as f:
             folder_splits = json.load(f)
@@ -57,6 +57,17 @@ class NewLoader():
 
                 self.subjects[partition].append(
                     self.preprocessing(data, gt, infos=(data_path, gt_path, folder, partition))
+                )
+
+        sparse_dataset_dir = config.get('sparse_dataset', None)
+        if sparse_dataset_dir is not None:
+            for i, folder in tqdm(enumerate(os.listdir(sparse_dataset_dir)), total=len(os.listdir(sparse_dataset_dir))):
+                data_path = os.path.join(sparse_dataset_dir, folder, 'data_sparse.npy')
+                gt_path = os.path.join(sparse_dataset_dir, folder, 'gt_sparse.npy')
+                data = np.load(data_path)
+                gt = np.load(gt_path)
+                self.subjects['train'].append(
+                    self.preprocessing(data, gt, infos=(data_path, gt_path, folder, 'train'))
                 )
 
         self.weights = self.config.get('weights', None)
