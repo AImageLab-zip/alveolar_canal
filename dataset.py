@@ -20,6 +20,7 @@ class NewLoader():
 
         self.subjects = {
             'train': [],
+            'pretrain': [],
             'test': [],
             'val': []
         }
@@ -63,11 +64,11 @@ class NewLoader():
         if sparse_dataset_dir is not None:
             for i, folder in tqdm(enumerate(os.listdir(sparse_dataset_dir)), total=len(os.listdir(sparse_dataset_dir))):
                 data_path = os.path.join(sparse_dataset_dir, folder, 'data_sparse.npy')
-                gt_path = os.path.join(sparse_dataset_dir, folder, 'gt_sparse.npy')
+                gt_path = os.path.join(sparse_dataset_dir, folder, 'syntetic.npy')
                 data = np.load(data_path)
                 gt = np.load(gt_path)
-                self.subjects['train'].append(
-                    self.preprocessing(data, gt, infos=(data_path, gt_path, folder, 'train'))
+                self.subjects['pretrain'].append(
+                    self.preprocessing(data, gt, infos=(data_path, gt_path, folder, 'pretrain'))
                 )
 
         self.weights = self.config.get('weights', None)
@@ -107,7 +108,7 @@ class NewLoader():
         # creating channel axis and making it RGB
         if data.ndim == 3: data = np.tile(data.reshape(1, *data.shape), (3, 1, 1, 1))
 
-        if partition == 'train':
+        if 'train' in partition:
             gt = CenterPad(new_shape)(gt)
             gt = Rescale(size=self.reshape_size, interp_fn='nearest')(gt)
             if gt.ndim == 3: gt = gt.reshape(1, *gt.shape)
@@ -145,6 +146,7 @@ class NewLoader():
 
     def split_dataset(self):
         train = tio.SubjectsDataset(self.subjects['train'], transform=self.transforms)
+        pretrain = tio.SubjectsDataset(self.subjects['pretrain'], transform=self.transforms)
         # logging.info("using the following augmentations: ", train[0].history)
 
         patch_shape = self.config['patch_shape']
@@ -154,7 +156,7 @@ class NewLoader():
         # TODO: grid sampling: might be interesting to make some test with overlapping!
         # TODO: check if grid or weight sampling is selected for the training data. assuming grid right now.
 
-        return train, test, val
+        return train, test, val, pretrain
 
 
     ##################################

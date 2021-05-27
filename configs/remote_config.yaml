@@ -15,6 +15,7 @@ trainer:
   checkpoint_path: null
   # skip train or do train?
   do_train: True
+  do_pre_train: True
   # how many iterations between validations
   validate_after_iters: 2
   # max number of epochs
@@ -76,12 +77,12 @@ data-loader:
 
   samples_per_volume: 8
   sampler_type: grid # valid types: grid, by_label
-  # sparse_dataset: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
-  sparse_dataset: null
+  sparse_dataset: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
+  # sparse_dataset: null
 
-#  labels:
-#    BACKGROUND: 0
-#    INSIDE: 1
+  labels:
+    BACKGROUND: 0
+    INSIDE: 1
 
 #  labels:
 #    UNLABELED: 3
@@ -89,7 +90,7 @@ data-loader:
 #    INSIDE: 1
 #    CONTOUR: 0
 
-  labels:
-    UNLABELED: 2
-    BACKGROUND: 0
-    INSIDE: 1
+#  labels:
+#    UNLABELED: 2
+#    BACKGROUND: 0
+#    INSIDE: 1

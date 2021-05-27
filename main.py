@@ -86,7 +86,7 @@ def main(experiment_name):
     evaluator = Evaluator(loader_config)
 
     data_utils = NewLoader(loader_config)
-    train_d, test_d, val_d = data_utils.split_dataset()
+    train_d, test_d, val_d, pretrain_d = data_utils.split_dataset()
 
     # TODO: more a warning. samples per volume by params is disabled now and automatically computed.
     #  we need to further investigate damages caused by a wrong number here
@@ -126,6 +126,18 @@ def main(experiment_name):
     if train_config['do_train']:
         writer = SummaryWriter(log_dir=os.path.join(config['tb_dir'], experiment_name), purge_step=start_epoch)
 
+        if train_config['do_pre_train']:
+            pre_train_queue = tio.Queue(
+                pretrain_d,
+                max_length=samples_per_volume * 4,  # queue len
+                samples_per_volume=samples_per_volume,
+                sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'), loader_config.get('grid_overlap', 0)),
+                num_workers=loader_config['num_workers'],
+            )
+            pre_train_loader = data.DataLoader(pre_train_queue, loader_config['batch_size'], num_workers=0)
+            for epoch in range(0, 10):
+                train(model, pre_train_loader, loss, optimizer, epoch, writer, evaluator, type='Pretrain')
+
         best_metric = 0
         # warm_up = np.ones(shape=train_config['epochs'])
         # warm_up[0:int(train_config['epochs'] * train_config.get('warm_up_length', 0.35))] = np.linspace(
@@ -134,11 +146,10 @@ def main(experiment_name):
 
         for epoch in range(start_epoch, train_config['epochs']):
 
-            epoch_loss, _ = train(model, train_loader, loss, optimizer, epoch, writer, evaluator)
+            train(model, train_loader, loss, optimizer, epoch, writer, evaluator)
 
-            val_iou, val_dice = test(model, val_loader, epoch, evaluator, loader_config, writer=writer)
-            writer.add_scalar('Metric/validation', val_iou, epoch)
-            logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric (iou): {val_iou} - (dice) {val_dice}')
+            val_iou, val_dice = test(model, val_loader, epoch, evaluator, loader_config, type='validation', writer=writer)
+
 
             if scheduler is not None:
                 if optim_name == 'SGD' and scheduler_name == 'Plateau':
@@ -214,6 +225,7 @@ if __name__ == '__main__':
 
     if args.test:
         config['trainer']['do_train'] = False
+        config['trainer']['do_pre_train'] = False
         config['data-loader']['num_workers'] = False
         config['trainer']['checkpoint_path'] = os.path.join(project_dir, 'best.pth')
 
