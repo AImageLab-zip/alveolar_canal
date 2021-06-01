@@ -14,7 +14,7 @@ import utils
 
 class NewLoader():
 
-    def __init__(self, config):
+    def __init__(self, config, do_train=True, do_Pretrain=True):
 
         self.config = config
 
@@ -24,6 +24,9 @@ class NewLoader():
             'test': [],
             'val': []
         }
+
+        self.do_train = do_train
+        self.do_pretrain = do_Pretrain
 
         self.dicom_max = config.get('volumes_max', 2100)
         self.dicom_min = config.get('volumes_min', 0)
@@ -41,6 +44,8 @@ class NewLoader():
 
         with open(config.get('split_filepath', '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json')) as f:
             folder_splits = json.load(f)
+        if not do_train:
+            folder_splits['train'] = []
 
         for partition, folders in folder_splits.items():
             for patient_num, folder in tqdm(enumerate(folders), total=len(folders)):
@@ -61,12 +66,12 @@ class NewLoader():
                 )
 
         sparse_dataset_dir = config.get('sparse_dataset', None)
-        if sparse_dataset_dir is not None:
+        if sparse_dataset_dir is not None and self.do_pretrain:
             for i, folder in tqdm(enumerate(os.listdir(sparse_dataset_dir)), total=len(os.listdir(sparse_dataset_dir))):
                 data_path = os.path.join(sparse_dataset_dir, folder, 'data_sparse.npy')
                 gt_path = os.path.join(sparse_dataset_dir, folder, 'syntetic.npy')
                 data = np.load(data_path)
-                gt = np.load(gt_path)
+                gt = np.load(gt_path).astype(np.uint8)
                 self.subjects['pretrain'].append(
                     self.preprocessing(data, gt, infos=(data_path, gt_path, folder, 'pretrain'))
                 )
@@ -144,15 +149,17 @@ class NewLoader():
         else:
             raise Exception('no valid sampling type provided')
 
-    def split_dataset(self):
-        train = tio.SubjectsDataset(self.subjects['train'], transform=self.transforms)
-        pretrain = tio.SubjectsDataset(self.subjects['pretrain'], transform=self.transforms)
+    def split_dataset(self, rank=0, world_size=1):
+        train = tio.SubjectsDataset(self.subjects['train'][rank::world_size], transform=self.transforms) if self.do_train else None
+        pretrain = tio.SubjectsDataset(self.subjects['pretrain'][rank::world_size], transform=self.transforms) if self.do_pretrain else None
         # logging.info("using the following augmentations: ", train[0].history)
 
-        patch_shape = self.config['patch_shape']
-        test = [tio.GridSampler(subject, patch_size=patch_shape, patch_overlap=0) for subject in self.subjects['test']]
-        val = [tio.GridSampler(subject, patch_size=patch_shape, patch_overlap=0) for subject in self.subjects['val']]
-
+        if rank == 0:
+            patch_shape = self.config['patch_shape']
+            test = [tio.GridSampler(subject, patch_size=patch_shape, patch_overlap=0) for subject in self.subjects['test']]
+            val = [tio.GridSampler(subject, patch_size=patch_shape, patch_overlap=0) for subject in self.subjects['val']]
+        else:
+            test = val = None
         # TODO: grid sampling: might be interesting to make some test with overlapping!
         # TODO: check if grid or weight sampling is selected for the training data. assuming grid right now.
 

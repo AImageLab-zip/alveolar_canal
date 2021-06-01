@@ -28,6 +28,7 @@ trainer:
   checkpoint_path: null
   # skip train or do train?
   do_train: true
+  do_pre_train: true
   # how many iterations between validations
   validate_after_iters: 2
 
@@ -36,6 +37,7 @@ data-loader:
   split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
   augmentations_file: "/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/base/base_augmentations.yaml"
+  sparse_dataset: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
 
   volumes_min: 0
 

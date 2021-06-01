@@ -7,7 +7,6 @@ seed: 47
 model:
   # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale, PositionalUNet3D
   name: transUNet3D
-  sharding: False
 
 # trainer configuration
 trainer:
@@ -15,7 +14,7 @@ trainer:
   checkpoint_path: null
   # skip train or do train?
   do_train: True
-  do_pre_train: True
+  do_pre_train: False
   # how many iterations between validations
   validate_after_iters: 2
   # max number of epochs
@@ -42,12 +41,12 @@ lr_scheduler:
 
 data-loader:
   # data loaders configuration
-  batch_size: 2
-  num_workers: 8
+  batch_size: 1
+  num_workers: 4
   # split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
   split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/fake_split.json'
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
-  augmentations_file: "/homes/mcipriano/sbatch_scripts/augmentations_files/6.yaml"
+  augmentations_file: null
 
   # create arch line and set to zero all the values out of the arch
   background_suppression: False
@@ -71,13 +70,14 @@ data-loader:
     - 304
 
   patch_shape:
-    - 120
-    - 120
-    - 120
+    - 80
+    - 80
+    - 80
 
   samples_per_volume: 8
   sampler_type: grid # valid types: grid, by_label
-  sparse_dataset: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
+  # sparse_dataset: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
+  sparse_dataset: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/test_sparse'
   # sparse_dataset: null
 
   labels:

@@ -3,6 +3,7 @@ import logging
 from tqdm import tqdm
 from torch import nn
 import torchio as tio
+import torch.distributed as dist
 
 
 def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, type='Train'):
@@ -11,7 +12,6 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, typ
     evaluator.reset_eval()
     losses = []
     for i, d in tqdm(enumerate(train_loader), total=len(train_loader), desc=f'{type} epoch {str(epoch)}'):
-
         images = d['data'][tio.DATA].float().cuda()
         labels = d['label'][tio.DATA].cuda()
         emb_codes = torch.cat((
@@ -20,14 +20,11 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, typ
         ), dim=1).float().cuda()
 
         optimizer.zero_grad()
-
         outputs = model(images, emb_codes)  # BS, Classes, Z, H, W
         loss = loss_fn(outputs, labels)
-
         losses.append(loss.item())
         loss.backward()
         optimizer.step()
-
         # final predictions
         if outputs.shape[1] > 1:
             outputs = torch.argmax(torch.nn.Softmax(dim=1)(outputs), dim=1).cpu().numpy()
@@ -42,8 +39,9 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, typ
 
     epoch_train_loss = sum(losses) / len(losses)
     epoch_iou, epoch_dice = evaluator.mean_metric()
-    writer.add_scalar(f'Loss/{type}', epoch_train_loss, epoch)
-    writer.add_scalar(f'Metric/{type}', epoch_iou, epoch)
+    if writer is not None:
+        writer.add_scalar(f'Loss/{type}', epoch_train_loss, epoch)
+        writer.add_scalar(f'Metric/{type}', epoch_iou, epoch)
 
     logging.info(
         f'{type} Epoch [{epoch}], '
