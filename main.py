@@ -85,6 +85,7 @@ def main(experiment_name, args):
     else:
         logging.info('using data parallel')
         model = nn.DataParallel(model).cuda()
+    is_distributed = world_size > 1
 
     train_params = model.parameters()
 
@@ -130,7 +131,7 @@ def main(experiment_name, args):
         sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'), loader_config.get('grid_overlap', 0)),
         num_workers=loader_config['num_workers'],
     )
-    sampler = DistributedSampler(train_queue, shuffle=False) if world_size > 1 else None
+    sampler = DistributedSampler(train_queue, shuffle=False) if is_distributed else None
     train_loader = data.DataLoader(train_queue, loader_config['batch_size'], num_workers=0, sampler=sampler)
 
     if rank == 0:
@@ -167,12 +168,13 @@ def main(experiment_name, args):
                 sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'), loader_config.get('grid_overlap', 0)),
                 num_workers=loader_config['num_workers'],
             )
-            sampler = DistributedSampler(pre_train_queue, shuffle=False) if world_size > 1 else None
+            sampler = DistributedSampler(pre_train_queue, shuffle=False) if is_distributed else None
             pre_train_loader = data.DataLoader(pre_train_queue, loader_config['batch_size'], num_workers=0, sampler=sampler)
 
             for epoch in range(0, 10):
                 # fix sampling seed such that each gpu gets different part of dataset
-                pre_train_loader.sampler.set_epoch(np.random.seed(np.random.randint(0, 10000)))
+                if is_distributed:
+                    pre_train_loader.sampler.set_epoch(np.random.seed(np.random.randint(0, 10000)))
                 train(model, pre_train_loader, loss, optimizer, epoch, writer, evaluator, type='Pretrain')
 
             if rank == 0:
@@ -188,10 +190,10 @@ def main(experiment_name, args):
 
         for epoch in range(start_epoch, train_config['epochs']):
 
-            train_loader.sampler.set_epoch(np.random.seed(np.random.randint(0, 10000)))
-
-            if world_size > 1:
+            if is_distributed:
+                train_loader.sampler.set_epoch(np.random.seed(np.random.randint(0, 10000)))
                 dist.barrier()
+                
             train(model, train_loader, loss, optimizer, epoch, writer, evaluator, type="train")
 
             if rank == 0:
