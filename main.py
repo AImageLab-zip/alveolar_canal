@@ -54,12 +54,8 @@ def main(experiment_name, args):
 
     loader_config = config.get('data-loader', None)
     train_config = config.get('trainer', None)
-    model_config = config.get('model')
 
-    model = utils.load_model(
-        model_config,
-        config
-    )
+    model = utils.load_model(config)
     # DDP setting
     world_size = 1
     rank = 0
@@ -171,7 +167,7 @@ def main(experiment_name, args):
             sampler = DistributedSampler(pre_train_queue, shuffle=False) if is_distributed else None
             pre_train_loader = data.DataLoader(pre_train_queue, loader_config['batch_size'], num_workers=0, sampler=sampler)
 
-            for epoch in range(0, 10):
+            for epoch in range(0, 35):
                 # fix sampling seed such that each gpu gets different part of dataset
                 if is_distributed:
                     pre_train_loader.sampler.set_epoch(np.random.seed(np.random.randint(0, 10000)))

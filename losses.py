@@ -117,7 +117,7 @@ class LossFn:
             # pred = torch.argmax(torch.nn.Softmax(dim=1)(pred), dim=1)
             # pred = pred.data.cpu().numpy()
             # gt = gt.cpu().numpy()
-            return DiceLoss(self.classes, self.device)(pred, gt)
+            loss_fn = DiceLoss(self.classes, self.device)
         else:
             raise Exception("specified loss function cant be found.")
 
