@@ -47,11 +47,13 @@ class JaccardLoss(torch.nn.Module):
 
 
 class DiceLoss(nn.Module):
-    def __init__(self, classes, device):
+    def __init__(self, classes, device, partition_weights):
         super().__init__()
         self.eps = 1e-06
         self.classes = classes
         self.device = device
+        self.weights = partition_weights
+        self.weights = self.weights.to(self.device)
 
     def forward(self, pred, gt):
         included = [v for k, v in self.classes.items() if k not in ['UNLABELED']]
@@ -67,6 +69,7 @@ class DiceLoss(nn.Module):
         intersection = torch.sum(input_soft * gt_onehot, dims)
         cardinality = torch.sum(input_soft + gt_onehot, dims)
         dice_score = 2. * intersection / (cardinality + self.eps)
+        self.weights * dice_score
         return torch.mean(1. - dice_score[:, included])
 
 
@@ -89,7 +92,7 @@ class LossFn:
         self.classes = loader_config['labels']
         self.weights = weights
 
-    def factory_loss(self, pred, gt, name):
+    def factory_loss(self, pred, gt, name, partition_weights):
 
         if name == 'CrossEntropyLoss':
             pred = torch.nn.Sigmoid()(pred)  # sigmoid here which is already built-in in other losses
@@ -117,13 +120,13 @@ class LossFn:
             # pred = torch.argmax(torch.nn.Softmax(dim=1)(pred), dim=1)
             # pred = pred.data.cpu().numpy()
             # gt = gt.cpu().numpy()
-            loss_fn = DiceLoss(self.classes, self.device)
+            loss_fn = DiceLoss(self.classes, self.device, partition_weights)
         else:
             raise Exception("specified loss function cant be found.")
 
         return loss_fn(pred, gt)
 
-    def __call__(self, pred, gt):
+    def __call__(self, pred, gt, partition_weights):
         """
         SHAPE MUST BE Bx1xHxW
         :param pred:
@@ -136,7 +139,7 @@ class LossFn:
 
         cur_loss = []
         for name in self.name:
-            loss = self.factory_loss(pred, gt, name)
+            loss = self.factory_loss(pred, gt, name, partition_weights)
             if torch.isnan(loss):
                 raise ValueError('Loss is nan during training...')
             cur_loss.append(loss)

@@ -18,10 +18,11 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, typ
             d['index_ini'],
             d['index_ini'] + torch.as_tensor(images.shape[-3:])
         ), dim=1).float().cuda()
+        partition_weights = d['weight']
 
         optimizer.zero_grad()
         outputs = model(images, emb_codes)  # BS, Classes, Z, H, W
-        loss = loss_fn(outputs, labels)
+        loss = loss_fn(outputs, labels, partition_weights)
         losses.append(loss.item())
         loss.backward()
         optimizer.step()

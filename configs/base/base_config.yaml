@@ -28,7 +28,7 @@ trainer:
   checkpoint_path: null
   # skip train or do train?
   do_train: true
-  do_pre_train: true
+  use_syntetic: true
   # how many iterations between validations
   validate_after_iters: 2
 

@@ -14,7 +14,7 @@ import utils
 
 class NewLoader():
 
-    def __init__(self, config, do_train=True, do_Pretrain=True):
+    def __init__(self, config, do_train=True, use_syntetic=True):
 
         self.config = config
 
@@ -26,7 +26,7 @@ class NewLoader():
         }
 
         self.do_train = do_train
-        self.do_pretrain = do_Pretrain
+        self.use_syntetic = use_syntetic
 
         self.dicom_max = config.get('volumes_max', 2100)
         self.dicom_min = config.get('volumes_min', 0)
@@ -44,10 +44,30 @@ class NewLoader():
 
         with open(config.get('split_filepath', '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json')) as f:
             folder_splits = json.load(f)
+
         if not do_train:
             folder_splits['train'] = []
+        else:
+            sparse_dataset_dir = config.get('sparse_dataset', None)
+            if sparse_dataset_dir is not None and self.use_syntetic:
+                pretrain_folders = os.listdir(sparse_dataset_dir)
+                train_len, syntetic_len = len(folder_splits['train']), len(pretrain_folders)
+                train_w = 1 - train_len / (train_len + syntetic_len)
+                syntetic_w = 1 - syntetic_len / (train_len + syntetic_len)
+                logging.info("loading syntetic data")
+                for i, folder in tqdm(enumerate(pretrain_folders), total=len(os.listdir(sparse_dataset_dir))):
+                    data_path = os.path.join(sparse_dataset_dir, folder, 'data_sparse.npy')
+                    gt_path = os.path.join(sparse_dataset_dir, folder, 'syntetic.npy')
+                    data = np.load(data_path)
+                    gt = np.load(gt_path).astype(np.uint8)
+                    self.subjects['train'].append(
+                        self.preprocessing(data, gt, infos=(data_path, gt_path, folder, 'pretrain', syntetic_w))
+                    )
+            else:
+                train_w = 1
 
         for partition, folders in folder_splits.items():
+            logging.info(f"loading data for {partition}")
             for patient_num, folder in tqdm(enumerate(folders), total=len(folders)):
 
                 data_path = os.path.join(config['file_paths'], folder, 'data.npy')
@@ -62,18 +82,7 @@ class NewLoader():
                 assert np.max(data) > 1  # data should not be normalized by default
 
                 self.subjects[partition].append(
-                    self.preprocessing(data, gt, infos=(data_path, gt_path, folder, partition))
-                )
-
-        sparse_dataset_dir = config.get('sparse_dataset', None)
-        if sparse_dataset_dir is not None and self.do_pretrain:
-            for i, folder in tqdm(enumerate(os.listdir(sparse_dataset_dir)), total=len(os.listdir(sparse_dataset_dir))):
-                data_path = os.path.join(sparse_dataset_dir, folder, 'data_sparse.npy')
-                gt_path = os.path.join(sparse_dataset_dir, folder, 'syntetic.npy')
-                data = np.load(data_path)
-                gt = np.load(gt_path).astype(np.uint8)
-                self.subjects['pretrain'].append(
-                    self.preprocessing(data, gt, infos=(data_path, gt_path, folder, 'pretrain'))
+                    self.preprocessing(data, gt, infos=(data_path, gt_path, folder, partition, train_w))
                 )
 
         self.weights = self.config.get('weights', None)
@@ -92,7 +101,7 @@ class NewLoader():
 
     def preprocessing(self, data, gt, infos):
 
-        data_path, gt_path, folder, partition = infos
+        data_path, gt_path, folder, partition, weight = infos
 
         # rescale
         data = np.clip(data, self.dicom_min, self.dicom_max)
@@ -122,7 +131,8 @@ class NewLoader():
                 label=tio.LabelMap(tensor=gt),
                 gt_path=gt_path,
                 data_path=data_path,
-                folder=folder
+                folder=folder,
+                weight=weight
             )
 
         return tio.Subject(
@@ -151,7 +161,6 @@ class NewLoader():
 
     def split_dataset(self, rank=0, world_size=1):
         train = tio.SubjectsDataset(self.subjects['train'][rank::world_size], transform=self.transforms) if self.do_train else None
-        pretrain = tio.SubjectsDataset(self.subjects['pretrain'][rank::world_size], transform=self.transforms) if self.do_pretrain else None
         # logging.info("using the following augmentations: ", train[0].history)
 
         if rank == 0:
@@ -163,7 +172,7 @@ class NewLoader():
         # TODO: grid sampling: might be interesting to make some test with overlapping!
         # TODO: check if grid or weight sampling is selected for the training data. assuming grid right now.
 
-        return train, test, val, pretrain
+        return train, test, val
 
 
     ##################################
@@ -200,7 +209,7 @@ class NewLoader():
 
         return [c / len(self.patients['gt']) for c in class_pixel_count]
 
-    def median_frequency_balancing(self):
+    def  median_frequency_balancing(self):
         """
         Computes class weights using Median Frequency Balancing.
         Source paper: https://arxiv.org/pdf/1411.4734.pdf (par. 6.3.2)

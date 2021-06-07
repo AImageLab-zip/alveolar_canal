@@ -103,14 +103,14 @@ def main(experiment_name, args):
             gamma=sched_config.get('factor', 0.1),
         )
     elif scheduler_name == 'Plateau':
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', verbose=True, patience=7)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', verbose=True, patience=10)
     else:
         scheduler = None
 
     evaluator = Evaluator(loader_config)
 
-    data_utils = NewLoader(loader_config, train_config.get("do_train", True), train_config.get("do_pre_train", True))
-    train_d, test_d, val_d, pretrain_d = data_utils.split_dataset(rank=rank, world_size=world_size)
+    data_utils = NewLoader(loader_config, train_config.get("do_train", True), train_config.get("use_syntetic", True))
+    train_d, test_d, val_d = data_utils.split_dataset(rank=rank, world_size=world_size)
 
     # TODO: more a warning. samples per volume by params is disabled now and automatically computed.
     #  we need to further investigate damages caused by a wrong number here
@@ -154,29 +154,6 @@ def main(experiment_name, args):
             writer = SummaryWriter(log_dir=os.path.join(config['tb_dir'], experiment_name), purge_step=start_epoch)
         else:
             writer = None
-
-        if train_config['do_pre_train']:
-            logging.info("starting pre-training on syntetic data")
-            pre_train_queue = tio.Queue(
-                pretrain_d,
-                max_length=samples_per_volume * 4,  # queue len
-                samples_per_volume=samples_per_volume,
-                sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'), loader_config.get('grid_overlap', 0)),
-                num_workers=loader_config['num_workers'],
-            )
-            sampler = DistributedSampler(pre_train_queue, shuffle=False) if is_distributed else None
-            pre_train_loader = data.DataLoader(pre_train_queue, loader_config['batch_size'], num_workers=0, sampler=sampler)
-
-            for epoch in range(0, 35):
-                # fix sampling seed such that each gpu gets different part of dataset
-                if is_distributed:
-                    pre_train_loader.sampler.set_epoch(np.random.seed(np.random.randint(0, 10000)))
-                train(model, pre_train_loader, loss, optimizer, epoch, writer, evaluator, type='Pretrain')
-
-            if rank == 0:
-                test_iou, _ = test(model, test_loader, train_config['epochs'] + 1, evaluator, loader_config, writer=None)
-                save_weights(epoch, model, optimizer, test_iou, os.path.join(project_dir, 'checkpoints', 'pretraining.pth'))
-                logging.info("pretraining is over. we start training with a IoU on test of {test_iou}")
 
         best_metric = 0
         # warm_up = np.ones(shape=train_config['epochs'])
@@ -300,7 +277,7 @@ if __name__ == '__main__':
 
     if args.test:
         config['trainer']['do_train'] = False
-        config['trainer']['do_pre_train'] = False
+        config['trainer']['use_syntetic'] = False
         config['data-loader']['num_workers'] = False
         config['trainer']['checkpoint_path'] = os.path.join(project_dir, 'best.pth')
 
