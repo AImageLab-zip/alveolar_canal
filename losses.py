@@ -56,7 +56,8 @@ class DiceLoss(nn.Module):
     def forward(self, pred, gt):
         included = [v for k, v in self.classes.items() if k not in ['UNLABELED']]
 
-        gt_onehot = torch.nn.functional.one_hot(gt.squeeze().long(), num_classes=len(self.classes)).unsqueeze(0)
+        # gt_onehot = torch.nn.functional.one_hot(gt.squeeze().long(), num_classes=len(self.classes)).unsqueeze(0)
+        gt_onehot = torch.nn.functional.one_hot(gt.squeeze().long(), num_classes=len(self.classes))
         gt_onehot = torch.movedim(gt_onehot, -1, 1)
         input_soft = F.softmax(pred, dim=1)
         dims = (2, 3, 4)
@@ -114,7 +115,7 @@ class LossFn:
             # pred = torch.argmax(torch.nn.Softmax(dim=1)(pred), dim=1)
             # pred = pred.data.cpu().numpy()
             # gt = gt.cpu().numpy()
-            return DiceLoss(self.classes, self.device)(pred, gt)
+            loss_fn = DiceLoss(self.classes, self.device)
         else:
             raise Exception("specified loss function cant be found.")
 

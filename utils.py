@@ -141,7 +141,7 @@ def load_config_yaml(config_file):
     return yaml.load(open(config_file, 'r'), yaml.FullLoader)
 
 
-def load_model(model_config, config):
+def load_model(config):
 
     model_config = config.get('model')
     loader_config = config.get('data-loader')
