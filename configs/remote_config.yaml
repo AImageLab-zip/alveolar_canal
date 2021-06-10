@@ -43,8 +43,8 @@ data-loader:
   # data loaders configuration
   batch_size: 2
   num_workers: 0
-  split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
-  # split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/fake_split.json'
+  # split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
+  split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/fake_split.json'
   file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
   augmentations_file: null
 
@@ -76,8 +76,8 @@ data-loader:
 
   samples_per_volume: 8
   sampler_type: grid # valid types: grid, by_label
-  sparse_dataset: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
-  # sparse_dataset: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/test_sparse'
+  # sparse_dataset: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
+  sparse_dataset: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/test_sparse'
   # sparse_dataset: null
 
   labels:

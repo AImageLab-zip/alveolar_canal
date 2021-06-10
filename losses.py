@@ -57,9 +57,8 @@ class DiceLoss(nn.Module):
 
     def forward(self, pred, gt):
         included = [v for k, v in self.classes.items() if k not in ['UNLABELED']]
-
         gt_onehot = torch.nn.functional.one_hot(gt.squeeze().long(), num_classes=len(self.classes))
-        if gt_onehot.ndim == 3:
+        if gt.shape[0] == 1:  # we need to add a further axis after the previous squeeze()
             gt_onehot = gt_onehot.unsqueeze(0)
 
         gt_onehot = torch.movedim(gt_onehot, -1, 1)
@@ -69,7 +68,8 @@ class DiceLoss(nn.Module):
         intersection = torch.sum(input_soft * gt_onehot, dims)
         cardinality = torch.sum(input_soft + gt_onehot, dims)
         dice_score = 2. * intersection / (cardinality + self.eps)
-        self.weights * dice_score
+        assert self.weights.shape[0] == dice_score.shape[0], "weights should have size of batch size"
+        dice_score = self.weights * dice_score
         return torch.mean(1. - dice_score[:, included])
 
 

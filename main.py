@@ -263,6 +263,9 @@ if __name__ == '__main__':
         print(f'master port: {os.environ["MASTER_PORT"]}')
         print(f'dist backend: {args.dist_backend}')
         print(f'dist url: {args.dist_url}')
+        print(f'cutting batchsize for distributed from {config["data-loader"]["batch_size"]}', end=" ")
+        config["data-loader"]["batch_size"] //= 2
+        print(f'to {config["data-loader"]["batch_size"]}')
     # END OF DISTRIBUTED BOOTSTRAP
     #####
 
