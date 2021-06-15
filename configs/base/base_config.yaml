@@ -35,9 +35,9 @@ trainer:
 data-loader:
   num_workers: 4
   split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
-  file_paths: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
-  augmentations_file: "/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/base/base_augmentations.yaml"
-  sparse_dataset: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
+  augmentations_file: "/homes/mcipriano/sbatch_scripts/augmentations_files/3.yaml"
+  file_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
+  sparse_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
 
   volumes_min: 0
 
@@ -49,6 +49,5 @@ data-loader:
     - 9.99e-01
 
   labels:
-    UNLABELED: 2
     BACKGROUND: 0
     INSIDE: 1

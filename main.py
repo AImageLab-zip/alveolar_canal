@@ -195,6 +195,7 @@ def main(experiment_name, args):
                     test_iou, test_dice = test(val_model, test_loader, train_config['epochs'] + 1, evaluator, loader_config, writer=None)
                     logging.info(f'TEST Epoch [{epoch}] - Mean Metric (iou): {test_iou} - (dice) {test_dice}')
                     writer.add_scalar('Metric/Test', test_iou, epoch)
+                    writer.add_scalar('Metric/Test_dice', test_dice, epoch)
 
         logging.info('BEST METRIC IS {}'.format(best_metric))
 

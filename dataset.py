@@ -20,11 +20,17 @@ class NewLoader():
 
         self.subjects = {
             'train': [],
-            'pretrain': [],
+            'syntetic': [],
             'test': [],
             'val': []
         }
 
+        self.split_weights = {
+            'train': 1,
+            'syntetic': 0.1,
+        }
+
+        self.DEBUG = []
         self.do_train = do_train
         self.use_syntetic = use_syntetic
 
@@ -40,49 +46,42 @@ class NewLoader():
         reshape_size = self.config.get('resize_shape', (152, 224, 256))
         self.reshape_size = tuple(reshape_size) if type(reshape_size) == list else reshape_size
 
-        gt_filename = 'gt_4labels.npy' if 'CONTOUR' in self.config['labels'] else 'gt_alpha.npy'
-
         with open(config.get('split_filepath', '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json')) as f:
             folder_splits = json.load(f)
 
         if not do_train:
             folder_splits['train'] = []
         else:
-            sparse_dataset_dir = config.get('sparse_dataset', None)
-            if sparse_dataset_dir is not None and self.use_syntetic:
-                pretrain_folders = os.listdir(sparse_dataset_dir)
-                train_len, syntetic_len = len(folder_splits['train']), len(pretrain_folders)
-                train_w = 1 - train_len / (train_len + syntetic_len)
-                syntetic_w = 1 - syntetic_len / (train_len + syntetic_len)
-                logging.info("loading syntetic data")
-                for i, folder in tqdm(enumerate(pretrain_folders), total=len(os.listdir(sparse_dataset_dir))):
-                    data_path = os.path.join(sparse_dataset_dir, folder, 'data_sparse.npy')
-                    gt_path = os.path.join(sparse_dataset_dir, folder, 'syntetic.npy')
-                    data = np.load(data_path)
-                    gt = np.load(gt_path).astype(np.uint8)
-                    self.subjects['train'].append(
-                        self.preprocessing(data, gt, infos=(data_path, gt_path, folder, 'pretrain', syntetic_w))
-                    )
-            else:
-                train_w = 1
+            if self.use_syntetic:
+                train_len, syntetic_len = len(folder_splits['train']), len(folder_splits['syntetic'])
+                self.split_weights['train'] = 1 - train_len / (train_len + syntetic_len)
+                self.split_weights['syntetic'] = 1 - syntetic_len / (train_len + syntetic_len)
+                logging.info("using syntetic data too")
 
         for partition, folders in folder_splits.items():
             logging.info(f"loading data for {partition}")
             for patient_num, folder in tqdm(enumerate(folders), total=len(folders)):
 
-                data_path = os.path.join(config['file_paths'], folder, 'data.npy')
-                gt_path = os.path.join(config['file_paths'], folder, gt_filename)
+                split_path = config['file_path'] if partition != 'syntetic' else config['sparse_path']
+                if partition == 'syntetic':
+                    gt_filename = 'syntetic.npy'
+                else:
+                    gt_filename = 'gt_4labels.npy' if 'CONTOUR' in self.config['labels'] else 'gt_alpha.npy'
+
+                data_path = os.path.join(split_path, folder, 'data.npy')
+                gt_path = os.path.join(split_path, folder, gt_filename)
 
                 if config.get('use_dicom', False):
                     data = Jaw(os.path.join(config['file_paths'], folder, 'DICOM', 'DICOMDIR')).get_volume()
                 else:
                     data = np.load(data_path)
-
+                self.DEBUG.append(data.shape)
                 gt = np.load(gt_path)
                 assert np.max(data) > 1  # data should not be normalized by default
+                assert np.unique(gt).size <= len(self.config['labels'])
 
                 self.subjects[partition].append(
-                    self.preprocessing(data, gt, infos=(data_path, gt_path, folder, partition, train_w))
+                    self.preprocessing(data, gt, infos=(data_path, gt_path, folder, partition))
                 )
 
         self.weights = self.config.get('weights', None)
@@ -101,7 +100,7 @@ class NewLoader():
 
     def preprocessing(self, data, gt, infos):
 
-        data_path, gt_path, folder, partition, weight = infos
+        data_path, gt_path, folder, partition = infos
 
         # rescale
         data = np.clip(data, self.dicom_min, self.dicom_max)
@@ -122,7 +121,7 @@ class NewLoader():
         # creating channel axis and making it RGB
         if data.ndim == 3: data = np.tile(data.reshape(1, *data.shape), (3, 1, 1, 1))
 
-        if 'train' in partition:
+        if partition in ['train', 'syntetic']:
             gt = CenterPad(new_shape)(gt)
             gt = Rescale(size=self.reshape_size, interp_fn='nearest')(gt)
             if gt.ndim == 3: gt = gt.reshape(1, *gt.shape)
@@ -132,14 +131,16 @@ class NewLoader():
                 gt_path=gt_path,
                 data_path=data_path,
                 folder=folder,
-                weight=weight
+                weight=self.split_weights[partition],
+                partition=partition
             )
 
         return tio.Subject(
             data=tio.ScalarImage(tensor=data),
             gt_path=gt_path,
             data_path=data_path,
-            folder=folder
+            folder=folder,
+            partition=partition
         )
 
     def get_aggregator(self):
@@ -160,7 +161,8 @@ class NewLoader():
             raise Exception('no valid sampling type provided')
 
     def split_dataset(self, rank=0, world_size=1):
-        train = tio.SubjectsDataset(self.subjects['train'][rank::world_size], transform=self.transforms) if self.do_train else None
+        training_set = self.subjects['train'] + self.subjects['syntetic']
+        train = tio.SubjectsDataset(training_set[rank::world_size], transform=self.transforms) if self.do_train else None
         # logging.info("using the following augmentations: ", train[0].history)
 
         if rank == 0:
