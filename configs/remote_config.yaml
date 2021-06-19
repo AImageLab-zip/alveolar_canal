@@ -43,8 +43,8 @@ data-loader:
   # data loaders configuration
   batch_size: 2
   num_workers: 0
-  split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
-  # split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/fake_split.json'
+  # split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
+  split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/fake_split.json'
 
   file_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
   sparse_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
