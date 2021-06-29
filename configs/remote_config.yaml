@@ -14,7 +14,7 @@ trainer:
   checkpoint_path: null
   # skip train or do train?
   do_train: True
-  use_syntetic: True
+  use_syntetic: False
   # how many iterations between validations
   validate_after_iters: 2
   # max number of epochs

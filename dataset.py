@@ -57,9 +57,11 @@ class NewLoader():
                 self.split_weights['train'] = 1 - train_len / (train_len + syntetic_len)
                 self.split_weights['syntetic'] = 1 - syntetic_len / (train_len + syntetic_len)
                 logging.info("using syntetic data too")
+            else:
+                folder_splits['syntetic'] = []
 
         for partition, folders in folder_splits.items():
-            logging.info(f"loading data for {partition} - tot: ({len(folders)}")
+            logging.info(f"loading data for {partition} - tot: {len(folders)}.")
             for patient_num, folder in tqdm(enumerate(folders), total=len(folders)):
 
                 sparse_path = os.path.join(config['sparse_path'], folder, 'gt_sparse.npy')

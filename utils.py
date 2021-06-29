@@ -162,7 +162,7 @@ def load_model(config):
             return padUNet3DMulti(num_classes)
         return padUNet3D(n_classes=num_classes)
     elif name == 'transBTS':
-        _, net = TransBTS(num_classes=2, img_dim=loader_config['patch_shape'][0])
+        _, net = TransBTS(num_classes=num_classes, img_dim=loader_config['patch_shape'][0])
         return net
     elif name == 'transUNet3D':
         return TransUNet3D(n_classes=num_classes, emb_shape=emb_shape)
