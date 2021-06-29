@@ -6,14 +6,19 @@ import torchio as tio
 import torch.distributed as dist
 
 
-def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, type='Train'):
+def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, type='Train', competitor=False):
 
     model.train()
     evaluator.reset_eval()
     losses = []
     for i, d in tqdm(enumerate(train_loader), total=len(train_loader), desc=f'{type} epoch {str(epoch)}'):
         images = d['data'][tio.DATA].float().cuda()
-        labels = d['label'][tio.DATA].cuda()
+
+        if competitor:
+            labels = d['sparse'][tio.DATA].cuda()[:, 0:1]  # sparse gt - temporary option for the competitor
+        else:
+            labels = d['label'][tio.DATA].cuda()
+
         emb_codes = torch.cat((
             d['index_ini'],
             d['index_ini'] + torch.as_tensor(images.shape[-3:])

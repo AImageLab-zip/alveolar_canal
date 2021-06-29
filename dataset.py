@@ -59,29 +59,28 @@ class NewLoader():
                 logging.info("using syntetic data too")
 
         for partition, folders in folder_splits.items():
-            logging.info(f"loading data for {partition}")
+            logging.info(f"loading data for {partition} - tot: ({len(folders)}")
             for patient_num, folder in tqdm(enumerate(folders), total=len(folders)):
 
-                split_path = config['file_path'] if partition != 'syntetic' else config['sparse_path']
-                if partition == 'syntetic':
-                    gt_filename = 'syntetic.npy'
+                sparse_path = os.path.join(config['sparse_path'], folder, 'gt_sparse.npy')
+                if partition == "syntetic":
+                    data_path = os.path.join(config['sparse_path'], folder, 'data.npy')
+                    gt_path = os.path.join(config['sparse_path'], folder, 'syntetic.npy')
                 else:
-                    gt_filename = 'gt_4labels.npy' if 'CONTOUR' in self.config['labels'] else 'gt_alpha.npy'
+                    data_path = os.path.join(config['file_path'], folder, 'data.npy')
+                    gt_filename = 'gt_alpha_multi.npy' if 'CONTOUR' in self.config['labels'] else 'gt_alpha.npy'
+                    gt_path = os.path.join(config['file_path'], folder, gt_filename)
 
-                data_path = os.path.join(split_path, folder, 'data.npy')
-                gt_path = os.path.join(split_path, folder, gt_filename)
-
-                if config.get('use_dicom', False):
-                    data = Jaw(os.path.join(config['file_paths'], folder, 'DICOM', 'DICOMDIR')).get_volume()
-                else:
-                    data = np.load(data_path)
-                self.DEBUG.append(data.shape)
+                data = np.load(data_path)
                 gt = np.load(gt_path)
+                sparse = np.load(sparse_path)
+
                 assert np.max(data) > 1  # data should not be normalized by default
                 assert np.unique(gt).size <= len(self.config['labels'])
+                assert np.max(sparse) <= 1
 
                 self.subjects[partition].append(
-                    self.preprocessing(data, gt, infos=(data_path, gt_path, folder, partition))
+                    self.preprocessing(data, gt, sparse, infos=(data_path, gt_path, sparse_path, folder, partition))
                 )
 
         self.weights = self.config.get('weights', None)
@@ -98,9 +97,9 @@ class NewLoader():
     def get_weights(self):
         return self.weights
 
-    def preprocessing(self, data, gt, infos):
+    def preprocessing(self, data, gt, sparse, infos):
 
-        data_path, gt_path, folder, partition = infos
+        data_path, gt_path, sparse_path, folder, partition = infos
 
         # rescale
         data = np.clip(data, self.dicom_min, self.dicom_max)
@@ -115,11 +114,14 @@ class NewLoader():
         new_shape = np.round(new_shape).astype(np.int)
 
         data = CenterPad(new_shape)(data)
-
         data = Rescale(size=self.reshape_size)(data)
 
-        # creating channel axis and making it RGB
+        sparse = CenterPad(new_shape)(sparse, pad_val=self.config['labels']['BACKGROUND'])
+        sparse = Rescale(size=self.reshape_size, interp_fn='nearest')(sparse)
+
+        # adding the 4th dim and making it RGB
         if data.ndim == 3: data = np.tile(data.reshape(1, *data.shape), (3, 1, 1, 1))
+        if sparse.ndim == 3: sparse = np.tile(sparse.reshape(1, *sparse.shape), (3, 1, 1, 1))
 
         if partition in ['train', 'syntetic']:
             gt = CenterPad(new_shape)(gt)
@@ -128,15 +130,17 @@ class NewLoader():
             return tio.Subject(
                 data=tio.ScalarImage(tensor=data),
                 label=tio.LabelMap(tensor=gt),
+                sparse=tio.LabelMap(tensor=sparse),
                 gt_path=gt_path,
                 data_path=data_path,
                 folder=folder,
                 weight=self.split_weights[partition],
-                partition=partition
+                partition=partition,
             )
 
         return tio.Subject(
             data=tio.ScalarImage(tensor=data),
+            sparse=tio.LabelMap(tensor=sparse),
             gt_path=gt_path,
             data_path=data_path,
             folder=folder,

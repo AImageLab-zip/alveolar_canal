@@ -79,11 +79,11 @@ data-loader:
 #    INSIDE: 1
 #    CONTOUR: 0
 
-#  labels:
-#    BACKGROUND: 0
-#    INSIDE: 1
-
   labels:
-    UNLABELED: 2
     BACKGROUND: 0
     INSIDE: 1
+
+#  labels:
+#    UNLABELED: 2
+#    BACKGROUND: 0
+#    INSIDE: 1

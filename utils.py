@@ -14,6 +14,7 @@ from models.PadUNet3Dmulti_2 import padUNet3DMulti
 from models.PadUNet3D import padUNet3D
 from models.transUnet import TransUNet3D
 from models.PadUNet3D import PositionalpadUNet3D as PospadUNet3D
+from models.TransBTS.TransBTS_downsample8x_skipconnection import TransBTS
 from models.ResidualEncoder import ResNetEncoder
 from models.ResNet50.ResNet50 import ResNet50
 from models.Multiscale.Multiscale import Multiscale3D
@@ -160,6 +161,9 @@ def load_model(config):
         if model_config.get('sharding', False):
             return padUNet3DMulti(num_classes)
         return padUNet3D(n_classes=num_classes)
+    elif name == 'transBTS':
+        _, net = TransBTS(num_classes=2, img_dim=loader_config['patch_shape'][0])
+        return net
     elif name == 'transUNet3D':
         return TransUNet3D(n_classes=num_classes, emb_shape=emb_shape)
     elif name == 'Multiscale':

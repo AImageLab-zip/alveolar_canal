@@ -5,8 +5,8 @@ tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
 seed: 47
 # model configuration
 model:
-  # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale, PositionalUNet3D
-  name: transUNet3D
+  # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale, PositionalUNet3D, transBTS
+  name: transBTS
 
 # trainer configuration
 trainer:
@@ -41,7 +41,7 @@ lr_scheduler:
 
 data-loader:
   # data loaders configuration
-  batch_size: 2
+  batch_size: 1
   num_workers: 0
   # split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
   split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/fake_split.json'

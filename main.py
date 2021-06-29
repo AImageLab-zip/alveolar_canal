@@ -167,7 +167,7 @@ def main(experiment_name, args):
                 train_loader.sampler.set_epoch(np.random.seed(np.random.randint(0, 10000)))
                 dist.barrier()
                 
-            train(model, train_loader, loss, optimizer, epoch, writer, evaluator, type="train")
+            train(model, train_loader, loss, optimizer, epoch, writer, evaluator, type="train", competitor=args.competitor)
 
             if rank == 0:
                 val_model = model.module
@@ -225,6 +225,7 @@ if __name__ == '__main__':
     arg_parser.add_argument('--dist-url', default='env://', type=str, help='url used to set up distributed training')
     arg_parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
     arg_parser.add_argument('--local_rank', default=-1, type=int, help='local rank for distributed training')
+    arg_parser.add_argument('--competitor', action='store_true', help='competitor trains on sparse')
 
     args = arg_parser.parse_args()
     yaml_path = args.base_config
