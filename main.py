@@ -112,24 +112,6 @@ def main(experiment_name, args):
     data_utils = NewLoader(loader_config, train_config.get("do_train", True), train_config.get("use_syntetic", True))
     train_d, test_d, val_d = data_utils.split_dataset(rank=rank, world_size=world_size)
 
-    # TODO: more a warning. samples per volume by params is disabled now and automatically computed.
-    #  we need to further investigate damages caused by a wrong number here
-    # samples_per_volume = loader_config.get('samples_per_volume', 'auto')
-    # if samples_per_volume == 'auto':
-    #     samples_per_volume = int(np.prod([np.round(i / j) for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])]))
-    # samples_per_volume = int(samples_per_volume)
-    samples_per_volume = int(np.prod([np.round(i / j) for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])]))
-
-    train_queue = tio.Queue(
-        train_d,
-        max_length=samples_per_volume * 4,  # queue len
-        samples_per_volume=samples_per_volume,
-        sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'), loader_config.get('grid_overlap', 0)),
-        num_workers=loader_config['num_workers'],
-    )
-    sampler = DistributedSampler(train_queue, shuffle=False) if is_distributed else None
-    train_loader = data.DataLoader(train_queue, loader_config['batch_size'], num_workers=0, sampler=sampler)
-
     if rank == 0:
         test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'] * world_size, num_workers=loader_config['num_workers'])) for test_p in test_d]
         val_loader = [(val_p, data.DataLoader(val_p, loader_config['batch_size'] * world_size, num_workers=loader_config['num_workers'])) for val_p in val_d]
@@ -150,6 +132,20 @@ def main(experiment_name, args):
 
     if train_config['do_train']:
 
+        # LOADING DATA WITH TORCHIO
+        samples_per_volume = int(np.prod([np.round(i / j) for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])]))
+
+        train_queue = tio.Queue(
+            train_d,
+            max_length=samples_per_volume * 4,  # queue len
+            samples_per_volume=samples_per_volume,
+            sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'), loader_config.get('grid_overlap', 0)),
+            num_workers=loader_config['num_workers'],
+        )
+        sampler = DistributedSampler(train_queue, shuffle=False) if is_distributed else None
+        train_loader = data.DataLoader(train_queue, loader_config['batch_size'], num_workers=0, sampler=sampler)
+
+        # creating training writer (purge on)
         if rank == 0:
             writer = SummaryWriter(log_dir=os.path.join(config['tb_dir'], experiment_name), purge_step=start_epoch)
         else:

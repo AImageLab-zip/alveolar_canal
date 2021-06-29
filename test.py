@@ -77,7 +77,7 @@ def test(model, test_loader, epoch, evaluator, config, dumper=None, writer=None,
             # END OF THE DUMP
 
             if dumper is not None:
-                dumper.dump(labels, output, images, subject[0]['folder'], score=evaluator.metric_list[-1])
+                dumper.dump(labels, output, images, subject[0]['folder'], scores=(evaluator.iou_list[-1], evaluator.dice_list[-1]))
 
     if skip_mean:
         return evaluator.iou_list

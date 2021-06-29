@@ -500,14 +500,14 @@ class SimpleDumper:
                            os.path.relpath(os.path.join(root, file),
                                            os.path.join(os.path.join(self.project_dir))))
 
-    def dump(self, gt_volume, prediction, images, patient_name, score='Nan'):
+    def dump(self, gt_volume, prediction, images, patient_name, scores='Nan'):
         save_dir = os.path.join(self.project_dir, 'numpy', f'{patient_name}')
         pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True)
         np.save(os.path.join(save_dir, 'gt.npy'), gt_volume)
         np.save(os.path.join(save_dir, 'pred.npy'), prediction)
         np.save(os.path.join(save_dir, 'input.npy'), images)
         with open(os.path.join(save_dir, 'score.txt'), "w") as text_file:
-            text_file.write(f"accuracy here: {score}")
+            text_file.write(f"scores here: {scores}")
 
     def save_zip(self):
         zipf = zipfile.ZipFile(os.path.join(self.project_dir, 'numpy.zip'), 'w', zipfile.ZIP_DEFLATED)

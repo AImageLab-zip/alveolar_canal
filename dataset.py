@@ -51,6 +51,7 @@ class NewLoader():
 
         if not do_train:
             folder_splits['train'] = []
+            folder_splits['syntetic'] = []
         else:
             if self.use_syntetic:
                 train_len, syntetic_len = len(folder_splits['train']), len(folder_splits['syntetic'])
