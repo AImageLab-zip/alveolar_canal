@@ -17,6 +17,8 @@ def test(model, test_loader, epoch, writer, evaluator, type):
         for i, (subject, loader) in tqdm(enumerate(test_loader), total=len(test_loader), desc='val epoch {}'.format(str(epoch))):
             aggr = tio.inference.GridAggregator(subject, overlap_mode='average')
             for subvolume in loader:
+                # batchsize with torchio affects the number of grids we extract from a patient.
+                # when we aggragate the patient the volume is just one.
                 images = subvolume['data'][tio.DATA].float().cuda()  # BS, 3, Z, H, W
                 emb_codes = subvolume[tio.LOCATION].float().cuda()
 
@@ -24,7 +26,7 @@ def test(model, test_loader, epoch, writer, evaluator, type):
 
                 aggr.add_batch(output, subvolume[tio.LOCATION])
 
-            output = aggr.get_output_tensor()
+            output = aggr.get_output_tensor()  # C, Z, H, W
             labels = np.load(subject[0]['gt_path'])  # original labels from storage
             images = np.load(subject[0]['data_path'])  # high resolution image from storage
 
@@ -36,7 +38,8 @@ def test(model, test_loader, epoch, writer, evaluator, type):
             reshape_size = np.array((D, H, W)) / pad_factor
             reshape_size = np.round(reshape_size).astype(np.int)
 
-            output = interpolate(output.unsqueeze(0), size=tuple(reshape_size), mode='trilinear', align_corners=False).squeeze()  # (classes, Z, H, W) or (Z, H, W) if classes = 1
+            # BS=1, after interpolate we can have (classes, Z, H, W) or (Z, H, W) if classes = 1
+            output = interpolate(output.unsqueeze(0), size=tuple(reshape_size), mode='trilinear', align_corners=False).squeeze()
             output = CenterCrop((D, H, W))(output)
 
             # final predictions
@@ -76,7 +79,6 @@ def test(model, test_loader, epoch, writer, evaluator, type):
             #         dataformats='HWC'
             #     )
             # END OF THE DUMP
-
 
     epoch_iou, epoch_dice, epoch_haus = evaluator.mean_metric(phase=type)
     if writer is not None and type != "Final":

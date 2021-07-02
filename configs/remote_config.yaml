@@ -5,15 +5,15 @@ tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
 seed: 47
 # model configuration
 model:
-  # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale, PositionalUNet3D, transBTS
-  name: transBTS
+  # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale, transUNet3D, transBTS
+  name: transUNet3D
 
 # trainer configuration
 trainer:
   # path to the checkpoint directory
-  checkpoint_path: null
+  checkpoint_path: '/nas/softechict-nas-2/mcipriano/results/maxillo/3D/5AI4RSIJF/best.pth'
   # skip train or do train?
-  do_train: True
+  do_train: False
   use_syntetic: False
   # how many iterations between validations
   validate_after_iters: 2

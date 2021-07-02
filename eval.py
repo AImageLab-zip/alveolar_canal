@@ -39,11 +39,13 @@ class Eval:
             cols = [f"s{n}" for n in range(self.hausdord_splits - 1)] + ["L entire"] + [f"s{n}" for n in range(self.hausdord_splits - 1)] + ["R entire"]
             df = pd.DataFrame(np.stack(self.hausdord_verbose), columns=cols)
 
-            df.replace([np.inf, 0], "", inplace=True)
+            df.replace([np.inf, 0], -1, inplace=True)
+            df = df.loc[:, df.max() > -1]  # removing column with empty hausdorf
+
             df.insert(0, 'PATIENT', self.test_ids, True)
-            df['haus tot'] = self.hausdorf_list
-            df['IoU'] = self.iou_list
-            df['dice'] = self.dice_list
+            df['haus tot'] = np.round(self.hausdorf_list, 2)
+            df['IoU'] = np.round(self.iou_list, 2)
+            df['dice'] = np.round(self.dice_list, 2)
             df.to_excel(excl_dest, index=False)
             self.save_zip()  # zip volumes with predictions
 
@@ -60,6 +62,7 @@ class Eval:
 
         excluded = ['BACKGROUND', 'UNLABELED']
         labels = [v for k, v in self.classes.items() if k not in excluded]  # exclude background from here
+        names = names if isinstance(names, list) else [names]
         self.test_ids += names
 
         for batch_id in range(pred.shape[0]):
