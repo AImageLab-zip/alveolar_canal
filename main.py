@@ -107,15 +107,14 @@ def main(experiment_name, args):
     else:
         scheduler = None
 
-    evaluator = Evaluator(loader_config)
+    evaluator = Evaluator(loader_config, project_dir, skip_dump=args.skip_dump)
 
     data_utils = NewLoader(loader_config, train_config.get("do_train", True), train_config.get("use_syntetic", True))
     train_d, test_d, val_d = data_utils.split_dataset(rank=rank, world_size=world_size)
 
     if rank == 0:
-        test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'] * world_size, num_workers=loader_config['num_workers'])) for test_p in test_d]
-        val_loader = [(val_p, data.DataLoader(val_p, loader_config['batch_size'] * world_size, num_workers=loader_config['num_workers'])) for val_p in val_d]
-        vol_writer = utils.SimpleDumper(loader_config, experiment_name, project_dir) if args.dump_results else None
+        test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for test_p in test_d]
+        val_loader = [(val_p, data.DataLoader(val_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for val_p in val_d]
 
     loss = LossFn(config.get('loss'), loader_config, weights=None)  # TODO: fix this, weights are disabled now
 
@@ -135,6 +134,7 @@ def main(experiment_name, args):
         # LOADING DATA WITH TORCHIO
         samples_per_volume = int(np.prod([np.round(i / j) for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])]))
 
+
         train_queue = tio.Queue(
             train_d,
             max_length=samples_per_volume * 4,  # queue len
@@ -143,7 +143,7 @@ def main(experiment_name, args):
             num_workers=loader_config['num_workers'],
         )
         sampler = DistributedSampler(train_queue, shuffle=False) if is_distributed else None
-        train_loader = data.DataLoader(train_queue, loader_config['batch_size'], num_workers=0, sampler=sampler)
+        train_loader = data.DataLoader(train_queue, loader_config['batch_size'] // world_size, num_workers=0, sampler=sampler)
 
         # creating training writer (purge on)
         if rank == 0:
@@ -151,11 +151,13 @@ def main(experiment_name, args):
         else:
             writer = None
 
-        best_metric = 0
         # warm_up = np.ones(shape=train_config['epochs'])
         # warm_up[0:int(train_config['epochs'] * train_config.get('warm_up_length', 0.35))] = np.linspace(
         #     0, 1, num=int(train_config['epochs'] * train_config.get('warm_up_length', 0.35))
         # )
+
+        best_val = 0
+        best_test = 0
 
         for epoch in range(start_epoch, train_config['epochs']):
 
@@ -163,13 +165,15 @@ def main(experiment_name, args):
                 train_loader.sampler.set_epoch(np.random.seed(np.random.randint(0, 10000)))
                 dist.barrier()
                 
-            train(model, train_loader, loss, optimizer, epoch, writer, evaluator, type="train", competitor=args.competitor)
+            train(model, train_loader, loss, optimizer, epoch, writer, evaluator, type="Train", competitor=args.competitor)
 
             if rank == 0:
                 val_model = model.module
-                val_iou, val_dice = test(val_model, val_loader, epoch, evaluator, loader_config, writer=writer)
-                logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric (iou): {val_iou} - (dice) {val_dice}')
-                writer.add_scalar('Metric/validation', val_iou, epoch)
+                val_iou, val_dice, val_haus = test(val_model, val_loader, epoch, writer, evaluator, type="Validation")
+
+                if val_iou < 1e-05 and epoch > 15:
+                    logging.info('drop in performances detected. aborting the experiment')
+                    exit(-3)
 
                 if scheduler is not None:
                     if optim_name == 'SGD' and scheduler_name == 'Plateau':
@@ -177,33 +181,21 @@ def main(experiment_name, args):
                     else:
                         scheduler.step(epoch)
 
-                if val_iou > best_metric and not args.test:
-                    best_metric = val_iou
-                    save_weights(epoch, model, optimizer, best_metric, os.path.join(project_dir, 'best.pth'))
+                save_weights(epoch, model, optimizer, val_iou, os.path.join(project_dir, 'checkpoints', 'last.pth'))
 
-                if val_iou < 1e-05 and epoch > 10:
-                    logging.info('drop in performances detected. aborting the experiment')
-                    return 0
-                elif not args.test:  # save current weights for debug, overwrite the same file
-                    save_weights(epoch, model, optimizer, val_iou, os.path.join(project_dir, 'checkpoints', 'last.pth'))
+                if val_iou > best_val:
+                    best_val = val_iou
+                    save_weights(epoch, model, optimizer, best_val, os.path.join(project_dir, 'best.pth'))
 
                 if epoch % 5 == 0 and epoch != 0:
-                    test_iou, test_dice = test(val_model, test_loader, train_config['epochs'] + 1, evaluator, loader_config, writer=None)
-                    logging.info(f'TEST Epoch [{epoch}] - Mean Metric (iou): {test_iou} - (dice) {test_dice}')
-                    writer.add_scalar('Metric/Test', test_iou, epoch)
-                    writer.add_scalar('Metric/Test_dice', test_dice, epoch)
+                    test_iou, _, _ = test(val_model, test_loader, epoch, writer, evaluator, type="Test")
+                    best_test = best_test if best_test > test_iou else test_iou
 
-        logging.info('BEST METRIC IS {}'.format(best_metric))
+        logging.info('BEST TEST METRIC IS {}'.format(best_test))
 
-    # final test
     if rank == 0:
-        final_iou_list = test(model, test_loader, train_config['epochs'] + 1, evaluator, loader_config, writer=None, dumper=vol_writer, skip_mean=True)
-        logging.info(f'FINAL METRIC (iou): {np.mean(final_iou_list)}')
-        logging.info(f'debug: final metric list: {final_iou_list}')
-
-        if vol_writer is not None:
-            logging.info("going to create zip archive. wait the end of the run pls")
-            vol_writer.save_zip()
+        val_model = model.module
+        test(val_model, test_loader, epoch="Final", writer=None, evaluator=evaluator, type="Final")
 
 
 if __name__ == '__main__':
@@ -216,12 +208,13 @@ if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('--base_config', default="config.yaml", help='path to the yaml config file')
     arg_parser.add_argument('--verbose', action='store_true', help="if true sdout is not redirected, default: false")
-    arg_parser.add_argument('--dump_results', action='store_true', help="dump test data, default: false")
+    arg_parser.add_argument('--skip_dump', action='store_true', help="dump test data, default: false")
     arg_parser.add_argument('--test', action='store_true', help="set up test params, default: false")
     arg_parser.add_argument('--dist-url', default='env://', type=str, help='url used to set up distributed training')
     arg_parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
     arg_parser.add_argument('--local_rank', default=-1, type=int, help='local rank for distributed training')
-    arg_parser.add_argument('--competitor', action='store_true', help='competitor trains on sparse')
+    arg_parser.add_argument('--competitor', action='store_true', help='competitor trains on sparse, default: false')
+    arg_parser.add_argument('--reload', action='store_true', help='reload experiment?, default: false')
 
     args = arg_parser.parse_args()
     yaml_path = args.base_config
@@ -281,5 +274,9 @@ if __name__ == '__main__':
         config['trainer']['use_syntetic'] = False
         config['data-loader']['num_workers'] = False
         config['trainer']['checkpoint_path'] = os.path.join(project_dir, 'best.pth')
+
+    if args.reload:
+        logging.info("RELOAD! setting checkpoint path to last.pth")
+        config['trainer']['checkpoint_path'] = os.path.join(project_dir, 'checkpoints', 'last.pth')
 
     main(experiment_name, args)

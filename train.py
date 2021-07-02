@@ -26,12 +26,19 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, typ
         partition_weights = d['weight']
 
         optimizer.zero_grad()
-        outputs = model(images, emb_codes)  # BS, Classes, Z, H, W
+        outputs = model(images, emb_codes)  # output -> B, C, Z, H, W
+        assert outputs.ndim == labels.ndim, f"Gt and output dimensions are not the same before loss. {outputs.ndim} vs {labels.ndim}"
+
         loss = loss_fn(outputs, labels, partition_weights)
         losses.append(loss.item())
         loss.backward()
         optimizer.step()
+
         # final predictions
+        # shape B, C, xyz -> softmax -> B, xyz
+        # shape 1, C, xyz -> softmax -> 1, xyz
+        # shape B, 1, xyz -> sigmoid + sqz -> B, xyz
+        # shape B, 1, xyz -> sigmoid + sqz -> xyz
         if outputs.shape[1] > 1:
             outputs = torch.argmax(torch.nn.Softmax(dim=1)(outputs), dim=1).cpu().numpy()
         else:
@@ -40,11 +47,11 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, typ
             outputs[outputs != 1] = 0
             outputs = outputs.squeeze().cpu().detach().numpy()  # BS, Z, H, W
 
-        labels = labels.cpu().numpy()  # BS, Z, H, W
-        evaluator.compute_metrics(outputs, labels)
+        labels = labels.squeeze().cpu().numpy()  # BS, Z, H, W
+        evaluator.compute_metrics(outputs, labels, images, d['folder'], type)
 
     epoch_train_loss = sum(losses) / len(losses)
-    epoch_iou, epoch_dice = evaluator.mean_metric()
+    epoch_iou, epoch_dice, epoch_haus = evaluator.mean_metric(phase=type)
     if writer is not None:
         writer.add_scalar(f'Loss/{type}', epoch_train_loss, epoch)
         writer.add_scalar(f'Metric/{type}', epoch_iou, epoch)
@@ -54,6 +61,7 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, typ
         f'{type} Mean Loss: {epoch_train_loss}, '
         f'{type} Mean Metric (IoU): {epoch_iou}'
         f'{type} Mean Metric (Dice): {epoch_dice}'
+        f'{type} Mean Metric (haus): {epoch_haus}'
     )
 
     return epoch_train_loss, epoch_iou

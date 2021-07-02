@@ -5,12 +5,6 @@ from traitsui.api import View, Item, HSplit, VSplit, VFold
 import numpy as np
 from matplotlib import pyplot as plt
 
-
-def simple_viewer(image):
-    plt.imshow(image, cmap='gray')
-    plt.show()
-
-
 COLORS = [
     (0.4, 0.9, 0.2), (0.8, 0.1, 0.2), (0, 0, 0),
     (0.6, 1, 0.1), (1, 1, 1), (0.1, 0.1, 0.4), (0, 0.4, 0.3),
@@ -20,7 +14,13 @@ COLORS = [
 ]
 
 
+def simple_viewer(image):
+    plt.imshow(image, cmap='gray')
+    plt.show()
+
 class MultiView(HasTraits):
+
+
 
     def __init__(self, *args):
         """
@@ -101,9 +101,9 @@ class SliceView:
         colors = np.moveaxis(np.stack((points, points, points)), 0, -1)
 
         for i, label in enumerate(args[1:]):
-            print(f'{i}-th volume has color: {COLORS[i]}')
+            print(f'{i}-th volume has color: {[255 * c for c in COLORS[i]]}')
             assert np.array_equal(label, label.astype(bool)), 'provide binary volumes as labels'
-            colors[label == 1] = COLORS[i]
+            colors[label == 1] = [255 * c for c in COLORS[i]]
 
         # N scalars
         scalars = 256 ** 2 * colors[..., 0] + 256 * colors[..., 1] + colors[..., 2]

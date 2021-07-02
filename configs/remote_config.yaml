@@ -33,7 +33,7 @@ optimizer:
 loss:
   # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss, Jaccard
   name:
-    - DiceLoss
+    - Jaccard
 
 lr_scheduler:
   # MultiStepLR, Plateau, null, ...

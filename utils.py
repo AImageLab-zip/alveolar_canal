@@ -486,33 +486,7 @@ class Splitter:
         return self.batch_size
 
 
-class SimpleDumper:
-    def __init__(self, loader_config, exp_name, project_dir):
-        self.config = loader_config
-        self.title = exp_name
-        self.project_dir = project_dir
 
-    def zipdir(self, ziph):
-        # ziph is zipfile handle
-        for root, dirs, files in os.walk(os.path.join(self.project_dir, 'numpy')):
-            for file in files:
-                ziph.write(os.path.join(root, file),
-                           os.path.relpath(os.path.join(root, file),
-                                           os.path.join(os.path.join(self.project_dir))))
-
-    def dump(self, gt_volume, prediction, images, patient_name, scores='Nan'):
-        save_dir = os.path.join(self.project_dir, 'numpy', f'{patient_name}')
-        pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True)
-        np.save(os.path.join(save_dir, 'gt.npy'), gt_volume)
-        np.save(os.path.join(save_dir, 'pred.npy'), prediction)
-        np.save(os.path.join(save_dir, 'input.npy'), images)
-        with open(os.path.join(save_dir, 'score.txt'), "w") as text_file:
-            text_file.write(f"scores here: {scores}")
-
-    def save_zip(self):
-        zipf = zipfile.ZipFile(os.path.join(self.project_dir, 'numpy.zip'), 'w', zipfile.ZIP_DEFLATED)
-        self.zipdir(zipf)
-        zipf.close()
 
 
 if __name__ == '__main__':

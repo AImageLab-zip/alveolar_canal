@@ -184,7 +184,7 @@ class BTS(TransformerBTS):
 
         self.num_classes = num_classes
 
-        self.Softmax = nn.Softmax(dim=1)
+        # self.Softmax = nn.Softmax(dim=1)
 
         self.Enblock8_1 = EnBlock1(in_channels=self.embedding_dim)
         self.Enblock8_2 = EnBlock2(in_channels=self.embedding_dim // 4)
@@ -228,7 +228,7 @@ class BTS(TransformerBTS):
         y2 = self.DeBlock2(y2)
 
         y = self.endconv(y2)      # (1, 4, 128, 128, 128)
-        y = self.Softmax(y)
+        # y = self.Softmax(y)
         return y
 
 class EnBlock1(nn.Module):
