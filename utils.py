@@ -158,9 +158,9 @@ def load_model(config):
     emb_shape = [dim // 8 for dim in loader_config['patch_shape']]
 
     if name == 'UNet3D':
-        if model_config.get('sharding', False):
-            return padUNet3DMulti(num_classes)
         return padUNet3D(n_classes=num_classes)
+    elif name == 'PadUNet':
+        return PospadUNet3D(n_classes=num_classes, emb_shape=emb_shape)
     elif name == 'transBTS':
         _, net = TransBTS(num_classes=num_classes, img_dim=loader_config['patch_shape'][0])
         return net
@@ -484,8 +484,6 @@ class Splitter:
 
     def get_batch(self):
         return self.batch_size
-
-
 
 
 

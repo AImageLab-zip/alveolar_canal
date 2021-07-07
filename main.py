@@ -1,26 +1,21 @@
 import argparse
 import os
 import pathlib
-import torch
 import torch.utils.data as data
 import builtins
-from torch.utils.data import SubsetRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 import utils
-from dataset import NewLoader
+from loaders.dataset3D import Loader3D
 from eval import Eval as Evaluator
 from losses import LossFn
 from test import test
 import sys
-import logging
-import torch.nn as nn
-import yaml
 import numpy as np
 from os import path
 import socket
 import random
 from torch.backends import cudnn
-from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.data import DistributedSampler
 import torch
 import logging
 from train import train
@@ -50,6 +45,7 @@ def main(experiment_name, args):
     np.random.seed(seed)
     random.seed(seed)
     torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
     # END OF DETERMINISTIC SET-UP
 
     loader_config = config.get('data-loader', None)

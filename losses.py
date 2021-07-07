@@ -4,46 +4,31 @@ from torch import nn
 import torch.nn.functional as F
 
 
-def jaccard(outputs, targets, per_image=False, non_empty=False, min_pixels=5):
-    batch_size = outputs.size()[0]
-    eps = 1e-3
-    if not per_image:
-        batch_size = 1
-    dice_target = targets.contiguous().view(batch_size, -1).float()
-    dice_output = outputs.contiguous().view(batch_size, -1)
-    target_sum = torch.sum(dice_target, dim=1)
-    intersection = torch.sum(dice_output * dice_target, dim=1)
-    losses = 1 - (intersection + eps) / (torch.sum(dice_output + dice_target, dim=1) - intersection + eps)
-    if non_empty:
-        assert per_image == True
-        non_empty_images = 0
-        sum_loss = 0
-        for i in range(batch_size):
-            if target_sum[i] > min_pixels:
-                sum_loss += losses[i]
-                non_empty_images += 1
-        if non_empty_images == 0:
-            return 0
-        else:
-            return sum_loss / non_empty_images
-    return losses.mean()
-
-
 class JaccardLoss(torch.nn.Module):
-    def __init__(self, weight=None, size_average=True, per_image=False, non_empty=False, apply_sigmoid=False,
+    def __init__(self, weight=None, size_average=True, per_volume=False, apply_sigmoid=False,
                  min_pixels=5):
         super().__init__()
         self.size_average = size_average
-        self.register_buffer('weight', weight)
-        self.per_image = per_image
-        self.non_empty = non_empty
+        self.weight = weight
+        self.per_volume = per_volume
         self.apply_sigmoid = apply_sigmoid
         self.min_pixels = min_pixels
 
-    def forward(self, input, target):
+    def forward(self, pred, target):
         if self.apply_sigmoid:
-            input = torch.sigmoid(input)
-        return jaccard(input, target, per_image=self.per_image, non_empty=self.non_empty, min_pixels=self.min_pixels)
+            pred = torch.sigmoid(pred)
+        return self.jaccard(pred, target)
+
+    def jaccard(self, outputs, targets):
+        batch_size = outputs.size()[0]
+        eps = 1e-3
+        if not self.per_volume:
+            batch_size = 1
+        dice_target = targets.contiguous().view(batch_size, -1).float()
+        dice_output = outputs.contiguous().view(batch_size, -1)
+        intersection = torch.sum(dice_output * dice_target, dim=1)
+        losses = 1 - (intersection + eps) / (torch.sum(dice_output + dice_target, dim=1) - intersection + eps)
+        return losses
 
 
 class DiceLoss(nn.Module):
@@ -70,7 +55,7 @@ class DiceLoss(nn.Module):
         dice_score = 2. * intersection / (cardinality + self.eps)
         assert self.weights.shape[0] == dice_score.shape[0], "weights should have size of batch size"
         dice_score = self.weights * dice_score
-        return torch.mean(1. - dice_score[:, included])
+        return 1. - dice_score[:, included]
 
 
 def one_hot_encode(volume, shape, device):
@@ -115,7 +100,7 @@ class LossFn:
                 loss_fn = nn.BCEWithLogitsLoss(pos_weight=self.weights).to(self.device)
         elif name == 'Jaccard':
             assert pred.shape[1] == 1, 'this loss works with a binary prediction'
-            return JaccardLoss(weight=self.weights, apply_sigmoid=True)(pred, gt)
+            loss_fn = JaccardLoss(weight=self.weights, apply_sigmoid=True, per_volume=True)
         elif name == 'DiceLoss':
             # pred = torch.argmax(torch.nn.Softmax(dim=1)(pred), dim=1)
             # pred = pred.data.cpu().numpy()
@@ -124,7 +109,9 @@ class LossFn:
         else:
             raise Exception("specified loss function cant be found.")
 
-        return loss_fn(pred, gt)
+        loss = loss_fn(pred, gt)
+        loss = loss * partition_weights
+        return loss.mean()
 
     def __call__(self, pred, gt, partition_weights):
         """
@@ -135,7 +122,6 @@ class LossFn:
         """
         assert pred.device == gt.device
         assert gt.device != 'cpu'
-        self.device = pred.device
 
         cur_loss = []
         for name in self.name:

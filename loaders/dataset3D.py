@@ -12,7 +12,7 @@ import logging
 import torchio as tio
 import utils
 
-class NewLoader():
+class Loader3D():
 
     def __init__(self, config, do_train=True, use_syntetic=True):
 

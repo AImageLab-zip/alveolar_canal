@@ -6,14 +6,14 @@ seed: 47
 # model configuration
 model:
   # model class, supported values: UNet3D, RESNET18, RESNET50, Multiscale, transUNet3D, transBTS
-  name: transUNet3D
+  name: PadUNet
 
 # trainer configuration
 trainer:
   # path to the checkpoint directory
-  checkpoint_path: '/nas/softechict-nas-2/mcipriano/results/maxillo/3D/5AI4RSIJF/best.pth'
+  checkpoint_path: null
   # skip train or do train?
-  do_train: False
+  do_train: True
   use_syntetic: False
   # how many iterations between validations
   validate_after_iters: 2
@@ -41,14 +41,14 @@ lr_scheduler:
 
 data-loader:
   # data loaders configuration
-  batch_size: 1
+  batch_size: 2
   num_workers: 0
   # split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json'
   split_filepath: '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/fake_split.json'
 
   file_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
   sparse_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
-  augmentations_file: null
+  augmentations_file: '/homes/mcipriano/sbatch_scripts/augmentations_files/1.yaml'
 
   # create arch line and set to zero all the values out of the arch
   background_suppression: False

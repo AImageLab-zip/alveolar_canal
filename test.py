@@ -82,9 +82,9 @@ def test(model, test_loader, epoch, writer, evaluator, type):
 
     epoch_iou, epoch_dice, epoch_haus = evaluator.mean_metric(phase=type)
     if writer is not None and type != "Final":
-        writer.add_scalar(f'Metric/{type}/IoU', epoch_iou, epoch)
-        writer.add_scalar(f'Metric/{type}/Dice', epoch_dice, epoch)
-        writer.add_scalar(f'Metric/{type}/Hauss', epoch_haus, epoch)
+        writer.add_scalar(f'{type}/IoU', epoch_iou, epoch)
+        writer.add_scalar(f'{type}/Dice', epoch_dice, epoch)
+        writer.add_scalar(f'{type}/Hauss', epoch_haus, epoch)
 
     logging.info(
         f'{type} Epoch [{epoch}], '

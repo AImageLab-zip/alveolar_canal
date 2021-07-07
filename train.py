@@ -23,7 +23,7 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, typ
             d['index_ini'],
             d['index_ini'] + torch.as_tensor(images.shape[-3:])
         ), dim=1).float().cuda()
-        partition_weights = d['weight']
+        partition_weights = d['weight'].cuda()
 
         optimizer.zero_grad()
         outputs = model(images, emb_codes)  # output -> B, C, Z, H, W
@@ -54,7 +54,7 @@ def train(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, typ
     epoch_iou, epoch_dice, epoch_haus = evaluator.mean_metric(phase=type)
     if writer is not None:
         writer.add_scalar(f'Loss/{type}', epoch_train_loss, epoch)
-        writer.add_scalar(f'Metric/{type}', epoch_iou, epoch)
+        writer.add_scalar(f'{type}', epoch_iou, epoch)
 
     logging.info(
         f'{type} Epoch [{epoch}], '

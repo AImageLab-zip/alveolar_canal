@@ -1,6 +1,19 @@
 import torch 
 import torch.nn as nn
 
+
+def initialize_weights(*models):
+    for model in models:
+        for module in model.modules():
+            if isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear):
+                nn.init.kaiming_normal_(module.weight)
+                if module.bias is not None:
+                    module.bias.data.zero_()
+            elif isinstance(module, nn.BatchNorm2d):
+                module.weight.data.fill_(1)
+                module.bias.data.zero_()
+
+
 class padUNet3D(nn.Module):
     def __init__(self, n_classes):
         self.n_classes = n_classes
@@ -29,6 +42,7 @@ class padUNet3D(nn.Module):
         self.dc2 = self.conv3Dblock(64 + 128, 64, kernel_size=3, stride=1, padding=1)
         self.dc1 = self.conv3Dblock(64, 64, kernel_size=3, stride=1, padding=1)
         self.final = nn.ConvTranspose3d(64, n_classes, kernel_size=3, padding=1, stride=1)
+        initialize_weights(self)
 
     def conv3Dblock(self, in_channels, out_channels, kernel_size=(3, 3, 3), stride=1, padding=(1, 1, 1)):
         return nn.Sequential(
@@ -73,7 +87,8 @@ class PositionalpadUNet3D(nn.Module):
         self.n_classes = n_classes
         super(PositionalpadUNet3D, self).__init__()
 
-        self.pos_embedding = nn.Parameter(torch.randn(emb_shape))
+        self.emb_shape = torch.as_tensor(emb_shape)
+        self.pos_emb_layer = nn.Linear(6, torch.prod(self.emb_shape).item())
         self.ec0 = self.conv3Dblock(3, 32)
         self.ec1 = self.conv3Dblock(32, 64, kernel_size=3, padding=1)  # third dimension to even val
         self.ec2 = self.conv3Dblock(64, 64)
@@ -87,7 +102,7 @@ class PositionalpadUNet3D(nn.Module):
         self.pool1 = nn.MaxPool3d(2)
         self.pool2 = nn.MaxPool3d(2)
 
-        self.dc9 = nn.ConvTranspose3d(512, 512, kernel_size=2, stride=2)
+        self.dc9 = nn.ConvTranspose3d(513, 512, kernel_size=2, stride=2)
         self.dc8 = self.conv3Dblock(256 + 512, 256, kernel_size=3, stride=1, padding=1)
         self.dc7 = self.conv3Dblock(256, 256, kernel_size=3, stride=1, padding=1)
         self.dc6 = nn.ConvTranspose3d(256, 256, kernel_size=2, stride=2)
@@ -97,6 +112,7 @@ class PositionalpadUNet3D(nn.Module):
         self.dc2 = self.conv3Dblock(64 + 128, 64, kernel_size=3, stride=1, padding=1)
         self.dc1 = self.conv3Dblock(64, 64, kernel_size=3, stride=1, padding=1)
         self.final = nn.ConvTranspose3d(64, n_classes, kernel_size=3, padding=1, stride=1)
+        initialize_weights(self)
 
     def conv3Dblock(self, in_channels, out_channels, kernel_size=(3, 3, 3), stride=1, padding=(1, 1, 1)):
         return nn.Sequential(
@@ -120,7 +136,7 @@ class PositionalpadUNet3D(nn.Module):
         h = self.ec6(h)
         h = self.ec7(h)
 
-        h += torch.index_select(self.pos_embedding, index=emb_codes, dim=0)
+        h = torch.cat((h, self.pos_emb_layer(emb_codes).view(-1, 1, *self.emb_shape)), dim=1)
         h = torch.cat((self.dc9(h), feat_2), dim=1)
 
         h = self.dc8(h)
@@ -133,4 +149,4 @@ class PositionalpadUNet3D(nn.Module):
         h = torch.cat((self.dc3(h), feat_0), dim=1)
         h = self.dc2(h)
         h = self.dc1(h)
-        return self.final(h.float())
+        return self.final(h)
