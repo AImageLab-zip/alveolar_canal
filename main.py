@@ -8,7 +8,7 @@ import utils
 from loaders.dataset3D import Loader3D
 from eval import Eval as Evaluator
 from losses import LossFn
-from test import test
+from test import test3D, test2D
 import sys
 import numpy as np
 from os import path
@@ -18,7 +18,7 @@ from torch.backends import cudnn
 from torch.utils.data import DistributedSampler
 import torch
 import logging
-from train import train
+from train import train3D, train2D
 from torch import nn
 import torchio as tio
 import torch.distributed as dist
@@ -51,7 +51,7 @@ def main(experiment_name, args):
     loader_config = config.get('data-loader', None)
     train_config = config.get('trainer', None)
 
-    model = utils.load_model(config)
+    model, dataset_type = utils.load_model(config)
     # DDP setting
     world_size = 1
     rank = 0
@@ -105,13 +105,6 @@ def main(experiment_name, args):
 
     evaluator = Evaluator(loader_config, project_dir, skip_dump=args.skip_dump)
 
-    data_utils = NewLoader(loader_config, train_config.get("do_train", True), train_config.get("use_syntetic", True))
-    train_d, test_d, val_d = data_utils.split_dataset(rank=rank, world_size=world_size)
-
-    if rank == 0:
-        test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for test_p in test_d]
-        val_loader = [(val_p, data.DataLoader(val_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for val_p in val_d]
-
     loss = LossFn(config.get('loss'), loader_config, weights=None)  # TODO: fix this, weights are disabled now
 
     start_epoch = 0
@@ -125,21 +118,9 @@ def main(experiment_name, args):
         except OSError as e:
             logging.info("No checkpoint exists from '{}'. Skipping...".format(train_config['checkpoint_path']))
 
+    train_loader, test_loader, val_loader, splitter = utils.load_dataset(config, rank, world_size, is_distributed, dataset_type)
+
     if train_config['do_train']:
-
-        # LOADING DATA WITH TORCHIO
-        samples_per_volume = int(np.prod([np.round(i / j) for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])]))
-
-
-        train_queue = tio.Queue(
-            train_d,
-            max_length=samples_per_volume * 4,  # queue len
-            samples_per_volume=samples_per_volume,
-            sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'), loader_config.get('grid_overlap', 0)),
-            num_workers=loader_config['num_workers'],
-        )
-        sampler = DistributedSampler(train_queue, shuffle=False) if is_distributed else None
-        train_loader = data.DataLoader(train_queue, loader_config['batch_size'] // world_size, num_workers=0, sampler=sampler)
 
         # creating training writer (purge on)
         if rank == 0:
@@ -160,12 +141,18 @@ def main(experiment_name, args):
             if is_distributed:
                 train_loader.sampler.set_epoch(np.random.seed(np.random.randint(0, 10000)))
                 dist.barrier()
-                
-            train(model, train_loader, loss, optimizer, epoch, writer, evaluator, type="Train", competitor=args.competitor)
+
+            if dataset_type == '2D':
+                train2D(model, train_loader, loss, optimizer, epoch, writer, evaluator, phase="Train")
+            else:
+                train3D(model, train_loader, loss, optimizer, epoch, writer, evaluator, phase="Train", competitor=args.competitor)
 
             if rank == 0:
                 val_model = model.module
-                val_iou, val_dice, val_haus = test(val_model, val_loader, epoch, writer, evaluator, type="Validation")
+                if dataset_type == '2D':
+                    val_iou, val_dice, val_haus = test2D(val_model, val_loader, epoch, writer, evaluator, "Validation", splitter)
+                else:
+                    val_iou, val_dice, val_haus = test3D(val_model, val_loader, epoch, writer, evaluator, phase="Validation")
 
                 if val_iou < 1e-05 and epoch > 15:
                     logging.info('drop in performances detected. aborting the experiment')
@@ -184,14 +171,20 @@ def main(experiment_name, args):
                     save_weights(epoch, model, optimizer, best_val, os.path.join(project_dir, 'best.pth'))
 
                 if epoch % 5 == 0 and epoch != 0:
-                    test_iou, _, _ = test(val_model, test_loader, epoch, writer, evaluator, type="Test")
+                    if dataset_type == '2D':
+                        test_iou, _, _ = test2D(model, test_loader, epoch, writer, evaluator, "Test", splitter)
+                    else:
+                        test_iou, _, _ = test3D(val_model, test_loader, epoch, writer, evaluator, phase="Test")
                     best_test = best_test if best_test > test_iou else test_iou
 
         logging.info('BEST TEST METRIC IS {}'.format(best_test))
 
     if rank == 0:
         val_model = model.module
-        test(val_model, test_loader, epoch="Final", writer=None, evaluator=evaluator, type="Final")
+        if dataset_type == '2D':
+            test2D(val_model, test_loader, epoch="Final", writer=None, evaluator=evaluator, phase="Final", splitter=splitter)
+        else:
+            test3D(val_model, test_loader, epoch="Final", writer=None, evaluator=evaluator, phase="Final")
 
 
 if __name__ == '__main__':
@@ -199,7 +192,7 @@ if __name__ == '__main__':
     # utils.fix_dataset_folder(r'Y:\work\datasets\maxillo\VOLUMES')
 
     RESULTS_DIR = r'Y:\work\results' if socket.gethostname() == 'DESKTOP-I67J6KK' else r'/nas/softechict-nas-2/mcipriano/results/maxillo/3D'
-    BASE_YAML_PATH = os.path.join('configs', 'config.yaml') if socket.gethostname() == 'DESKTOP-I67J6KK' else os.path.join('configs', 'remote_config.yaml')
+    BASE_YAML_PATH = os.path.join('configs', 'config.yaml') if socket.gethostname() == 'DESKTOP-I67J6KK' else os.path.join('configs', 'remote_3D.yaml')
 
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('--base_config', default="config.yaml", help='path to the yaml config file')

@@ -1,16 +1,16 @@
+from torch.utils.data import DistributedSampler
+import torch.utils.data as data
+from torch.utils.data import SubsetRandomSampler
+import torchio as tio
 import logging
 import os
-from matplotlib import pyplot as plt
 import numpy as np
 from os import listdir
 from os.path import isfile, join
 import re
 import cv2
 import yaml
-import torch.nn as nn
-import torch
-import math
-from models.PadUNet3Dmulti_2 import padUNet3DMulti
+from models.PadUNet2D import UNet as PadUNet2D
 from models.PadUNet3D import padUNet3D
 from models.transUnet import TransUNet3D
 from models.PadUNet3D import PositionalpadUNet3D as PospadUNet3D
@@ -19,11 +19,8 @@ from models.ResidualEncoder import ResNetEncoder
 from models.ResNet50.ResNet50 import ResNet50
 from models.Multiscale.Multiscale import Multiscale3D
 import sys
-import pathlib
 from Jaw import Jaw
 import torch
-import zipfile
-import json
 from tqdm import tqdm
 
 
@@ -155,23 +152,26 @@ def load_model(config):
 
     name = model_config.get('name', 'UNet3D')
 
+    if name == 'PadUNet2D':
+        return PadUNet2D(num_classes=num_classes, in_ch=3), "2D"
+
     emb_shape = [dim // 8 for dim in loader_config['patch_shape']]
 
-    if name == 'UNet3D':
-        return padUNet3D(n_classes=num_classes)
-    elif name == 'PadUNet':
-        return PospadUNet3D(n_classes=num_classes, emb_shape=emb_shape)
+    if name == 'PadUNet3D':
+        return padUNet3D(n_classes=num_classes), "3D"
+    elif name == 'PosPadUNet3D':
+        return PospadUNet3D(n_classes=num_classes, emb_shape=emb_shape), "3D"
     elif name == 'transBTS':
         _, net = TransBTS(num_classes=num_classes, img_dim=loader_config['patch_shape'][0])
-        return net
+        return net,"3D"
     elif name == 'transUNet3D':
-        return TransUNet3D(n_classes=num_classes, emb_shape=emb_shape)
+        return TransUNet3D(n_classes=num_classes, emb_shape=emb_shape), "3D"
     elif name == 'Multiscale':
-        return Multiscale3D(num_classes=num_classes)
+        return Multiscale3D(num_classes=num_classes), "3D"
     elif model_config['name'] == 'RESNET18':
-        return ResNetEncoder(n_classes=num_classes)
+        return ResNetEncoder(n_classes=num_classes), "3D"
     elif model_config['name'] == 'RESNET50':
-        return ResNet50(out_channels=num_classes)
+        return ResNet50(out_channels=num_classes), "3D"
     else:
         raise Exception("Model not found, check the config.yaml")
 
@@ -486,6 +486,71 @@ class Splitter:
         return self.batch_size
 
 
+def load_dataset(config, rank, world_size, is_distributed, train_type="2D"):
+    from loaders.dataset2D import AlveolarDataloader
+    from loaders.dataset3D import Loader3D
+    loader_config = config.get('data-loader', None)
+    train_config = config.get('trainer', None)
+
+    train_loader, test_loader, val_loader = None, None, None
+
+    if train_type == "2D":
+        alveolar_data = AlveolarDataloader(loader_config, train_config.get("do_train", None), train_config.get("additional_dataset", None))
+        train_id, test_id, val_id = alveolar_data.split_dataset()
+        splitter = alveolar_data.get_splitter()
+        if config['trainer']['do_train']:
+            train_loader = data.DataLoader(
+                alveolar_data,
+                batch_size=loader_config['batch_size'],
+                sampler=SubsetRandomSampler(train_id),
+                num_workers=loader_config['num_workers'],
+                pin_memory=True,
+                drop_last=True,
+            )
+        if rank == 0:
+            test_loader = data.DataLoader(
+                alveolar_data,
+                batch_size=loader_config['batch_size'],
+                sampler=test_id,
+                num_workers=loader_config['num_workers'],
+                pin_memory=True,
+                drop_last=False,
+                collate_fn=alveolar_data.custom_collate
+            )
+
+            val_loader = data.DataLoader(
+                alveolar_data,
+                batch_size=loader_config['batch_size'],
+                sampler=val_id,
+                num_workers=loader_config['num_workers'],
+                pin_memory=True,
+                drop_last=False,
+                collate_fn=alveolar_data.custom_collate
+            )
+    elif train_type == "3D":
+        data_utils = Loader3D(loader_config, train_config.get("do_train", None), train_config.get("additional_dataset", None))
+        train_d, test_d, val_d = data_utils.split_dataset()
+        splitter = None
+
+        if config['trainer']['do_train']:
+            samples_per_volume = int(np.prod([np.round(i / j) for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])]))
+            train_queue = tio.Queue(
+                train_d,
+                max_length=samples_per_volume * 4,  # queue len
+                samples_per_volume=samples_per_volume,
+                sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'),loader_config.get('grid_overlap', 0)),
+                num_workers=loader_config['num_workers'],
+            )
+            sampler = DistributedSampler(train_queue, shuffle=False) if is_distributed else None
+            train_loader = data.DataLoader(train_queue, loader_config['batch_size'] // world_size, num_workers=0, sampler=sampler)
+
+        if rank == 0:
+            test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for test_p in test_d]
+            val_loader = [(val_p, data.DataLoader(val_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for val_p in val_d]
+    else:
+        raise Exception(f"type {train_type} not recognized!")
+
+    return train_loader, test_loader, val_loader, splitter
 
 if __name__ == '__main__':
     fix_dataset_folder(r'Y:\work\datasets\maxillo\nuovi')

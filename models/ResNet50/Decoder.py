@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 from models.ResNet50.resnet_utils import conv1x1, Bottleneck, BasicBlock
 

@@ -14,7 +14,7 @@ import utils
 
 class Loader3D():
 
-    def __init__(self, config, do_train=True, use_syntetic=True):
+    def __init__(self, config, do_train=True, additional_dataset=None):
 
         self.config = config
 
@@ -25,14 +25,11 @@ class Loader3D():
             'val': []
         }
 
-        self.split_weights = {
-            'train': 1,
-            'syntetic': 0.1,
-        }
+        #  default weights to be overridden
+        self.split_weights = {'train': 1, 'syntetic': 0}
 
-        self.DEBUG = []
         self.do_train = do_train
-        self.use_syntetic = use_syntetic
+        self.additional_dataset = additional_dataset
 
         self.dicom_max = config.get('volumes_max', 2100)
         self.dicom_min = config.get('volumes_min', 0)
@@ -46,18 +43,21 @@ class Loader3D():
         reshape_size = self.config.get('resize_shape', (152, 224, 256))
         self.reshape_size = tuple(reshape_size) if type(reshape_size) == list else reshape_size
 
-        with open(config.get('split_filepath', '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json')) as f:
+        split_filepath = config.get('split_filepath')
+        logging.info(f"split filepath is {split_filepath}")
+        with open(split_filepath) as f:
             folder_splits = json.load(f)
 
         if not do_train:
             folder_splits['train'] = []
             folder_splits['syntetic'] = []
+            logging.info("training is going to be skipped")
         else:
-            if self.use_syntetic:
+            if self.additional_dataset:
                 train_len, syntetic_len = len(folder_splits['train']), len(folder_splits['syntetic'])
                 self.split_weights['train'] = 1 - train_len / (train_len + syntetic_len)
                 self.split_weights['syntetic'] = 1 - syntetic_len / (train_len + syntetic_len)
-                logging.info("using syntetic data too")
+                logging.info(f"using syntetic dataset -> {self.additional_dataset}")
             else:
                 folder_splits['syntetic'] = []
 
@@ -68,7 +68,10 @@ class Loader3D():
                 sparse_path = os.path.join(config['sparse_path'], folder, 'gt_sparse.npy')
                 if partition == "syntetic":
                     data_path = os.path.join(config['sparse_path'], folder, 'data.npy')
-                    gt_path = os.path.join(config['sparse_path'], folder, 'syntetic.npy')
+                    assert additional_dataset in ['Naive', 'Generated']
+                    filename = 'syntetic.npy' if additional_dataset == 'Naive' else 'generated.npy'
+                    assert filename != 'generated', "NOT READY YET!"
+                    gt_path = os.path.join(config['sparse_path'], folder, filename)
                 else:
                     data_path = os.path.join(config['file_path'], folder, 'data.npy')
                     gt_filename = 'gt_alpha_multi.npy' if 'CONTOUR' in self.config['labels'] else 'gt_alpha.npy'

@@ -40,8 +40,8 @@ class RandomVerticalFlip:
     def __call__(self, data):
         if np.random.uniform(0, 1) < self.execution_probability:
             image, mask = data
-            image = np.flip(image, axis=2)
-            mask = np.flip(mask, axis=2)
+            image = np.flip(image, axis=0)
+            mask = np.flip(mask, axis=0)
             return [image, mask]
         return data
 

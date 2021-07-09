@@ -32,7 +32,9 @@ class Eval:
         if phase not in ["Train", "Validation", "Test", "Final"]:
             raise Exception(f"this phase is not valid {phase}")
 
-        iou, dice, haus = mean(self.iou_list), mean(self.dice_list), max(self.hausdorf_list)
+        iou = 0 if len(self.iou_list) == 0 else mean(self.iou_list)
+        dice = 0 if len(self.dice_list) == 0 else mean(self.dice_list)
+        haus = 0 if len(self.hausdorf_list) == 0 else max(self.hausdorf_list)
 
         if phase == "Final":
             excl_dest = os.path.join(self.project_dir, 'logs', 'results.xlsx')
