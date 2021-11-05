@@ -87,7 +87,6 @@ class AlveolarDataloader(Dataset):
                 if partition == "syntetic":
                     data_path = os.path.join(config['sparse_path'], folder, 'data.npy')
                     gt_filename = 'syntetic.npy' if additional_dataset == 'Naive' else 'generated.npy'
-                    assert gt_filename != 'generated', "NOT READY YET!"
                     gt_path = os.path.join(config['sparse_path'], folder, gt_filename)
                 else:
                     data_path = os.path.join(config['file_path'], folder, 'data.npy')

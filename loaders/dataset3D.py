@@ -12,9 +12,10 @@ import logging
 import torchio as tio
 import utils
 
+
 class Loader3D():
 
-    def __init__(self, config, do_train=True, additional_dataset=None):
+    def __init__(self, config, do_train=True, additional_dataset=None, is_competitor=False):
 
         self.config = config
 
@@ -26,7 +27,7 @@ class Loader3D():
         }
 
         #  default weights to be overridden
-        self.split_weights = {'train': 1, 'syntetic': 0}
+        self.split_weights = {'train': 1, 'syntetic': 1}
 
         self.do_train = do_train
         self.additional_dataset = additional_dataset
@@ -54,9 +55,9 @@ class Loader3D():
             logging.info("training is going to be skipped")
         else:
             if self.additional_dataset:
-                train_len, syntetic_len = len(folder_splits['train']), len(folder_splits['syntetic'])
-                self.split_weights['train'] = 1 - train_len / (train_len + syntetic_len)
-                self.split_weights['syntetic'] = 1 - syntetic_len / (train_len + syntetic_len)
+                # train_len, syntetic_len = len(folder_splits['train']), len(folder_splits['syntetic'])
+                # self.split_weights['train'] = 1 - train_len / (train_len + syntetic_len)
+                # self.split_weights['syntetic'] = 1 - syntetic_len / (train_len + syntetic_len)
                 logging.info(f"using syntetic dataset -> {self.additional_dataset}")
             else:
                 folder_splits['syntetic'] = []
@@ -65,28 +66,26 @@ class Loader3D():
             logging.info(f"loading data for {partition} - tot: {len(folders)}.")
             for patient_num, folder in tqdm(enumerate(folders), total=len(folders)):
 
-                sparse_path = os.path.join(config['sparse_path'], folder, 'gt_sparse.npy')
+                data_path = os.path.join(config['sparse_path'], folder, 'data.npy')
+
                 if partition == "syntetic":
-                    data_path = os.path.join(config['sparse_path'], folder, 'data.npy')
                     assert additional_dataset in ['Naive', 'Generated']
                     filename = 'syntetic.npy' if additional_dataset == 'Naive' else 'generated.npy'
-                    assert filename != 'generated', "NOT READY YET!"
                     gt_path = os.path.join(config['sparse_path'], folder, filename)
+                elif partition in ["train", "val"] and is_competitor:
+                    gt_path = os.path.join(config['sparse_path'], folder, 'syntetic.npy')
                 else:
-                    data_path = os.path.join(config['file_path'], folder, 'data.npy')
                     gt_filename = 'gt_alpha_multi.npy' if 'CONTOUR' in self.config['labels'] else 'gt_alpha.npy'
                     gt_path = os.path.join(config['file_path'], folder, gt_filename)
 
                 data = np.load(data_path)
                 gt = np.load(gt_path)
-                sparse = np.load(sparse_path)
 
                 assert np.max(data) > 1  # data should not be normalized by default
                 assert np.unique(gt).size <= len(self.config['labels'])
-                assert np.max(sparse) <= 1
 
                 self.subjects[partition].append(
-                    self.preprocessing(data, gt, sparse, infos=(data_path, gt_path, sparse_path, folder, partition))
+                    self.preprocessing(data, gt, infos=(data_path, gt_path, folder, partition))
                 )
 
         self.weights = self.config.get('weights', None)
@@ -103,9 +102,9 @@ class Loader3D():
     def get_weights(self):
         return self.weights
 
-    def preprocessing(self, data, gt, sparse, infos):
+    def preprocessing(self, data, gt, infos):
 
-        data_path, gt_path, sparse_path, folder, partition = infos
+        data_path, gt_path, folder, partition = infos
 
         # rescale
         data = np.clip(data, self.dicom_min, self.dicom_max)
@@ -122,21 +121,18 @@ class Loader3D():
         data = CenterPad(new_shape)(data)
         data = Rescale(size=self.reshape_size)(data)
 
-        sparse = CenterPad(new_shape)(sparse, pad_val=self.config['labels']['BACKGROUND'])
-        sparse = Rescale(size=self.reshape_size, interp_fn='nearest')(sparse)
+        gt = gt.astype(np.uint8)
 
         # adding the 4th dim and making it RGB
         if data.ndim == 3: data = np.tile(data.reshape(1, *data.shape), (3, 1, 1, 1))
-        if sparse.ndim == 3: sparse = np.tile(sparse.reshape(1, *sparse.shape), (3, 1, 1, 1))
 
         if partition in ['train', 'syntetic']:
-            gt = CenterPad(new_shape)(gt)
+            gt = CenterPad(new_shape)(gt, pad_val=self.config['labels']['BACKGROUND'])
             gt = Rescale(size=self.reshape_size, interp_fn='nearest')(gt)
             if gt.ndim == 3: gt = gt.reshape(1, *gt.shape)
             return tio.Subject(
                 data=tio.ScalarImage(tensor=data),
                 label=tio.LabelMap(tensor=gt),
-                sparse=tio.LabelMap(tensor=sparse),
                 gt_path=gt_path,
                 data_path=data_path,
                 folder=folder,
@@ -146,7 +142,6 @@ class Loader3D():
 
         return tio.Subject(
             data=tio.ScalarImage(tensor=data),
-            sparse=tio.LabelMap(tensor=sparse),
             gt_path=gt_path,
             data_path=data_path,
             folder=folder,
@@ -215,13 +210,14 @@ class Loader3D():
         num_labels = len(self.config.get('labels'))
         class_pixel_count = num_labels * [0]
 
-        for gt in self.patients['gt']:
+        for p in self.subjects['train']:
+            gt = p['label'][tio.DATA].cpu().numpy()
             for l in valid_labels:
                 class_pixel_count[l] += np.sum(gt == l) / np.sum(np.in1d(gt, valid_labels))
 
-        return [c / len(self.patients['gt']) for c in class_pixel_count]
+        return [c / len(self.subjects['train']) for c in class_pixel_count]
 
-    def  median_frequency_balancing(self):
+    def median_frequency_balancing(self):
         """
         Computes class weights using Median Frequency Balancing.
         Source paper: https://arxiv.org/pdf/1411.4734.pdf (par. 6.3.2)

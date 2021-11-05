@@ -99,7 +99,7 @@ def main(experiment_name, args):
             gamma=sched_config.get('factor', 0.1),
         )
     elif scheduler_name == 'Plateau':
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', verbose=True, patience=10)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', verbose=True, patience=7)
     else:
         scheduler = None
 
@@ -118,7 +118,7 @@ def main(experiment_name, args):
         except OSError as e:
             logging.info("No checkpoint exists from '{}'. Skipping...".format(train_config['checkpoint_path']))
 
-    train_loader, test_loader, val_loader, splitter = utils.load_dataset(config, rank, world_size, is_distributed, dataset_type)
+    train_loader, test_loader, val_loader, splitter = utils.load_dataset(config, rank, world_size, is_distributed, dataset_type, args.competitor)
 
     if train_config['do_train']:
 
@@ -145,7 +145,7 @@ def main(experiment_name, args):
             if dataset_type == '2D':
                 train2D(model, train_loader, loss, optimizer, epoch, writer, evaluator, phase="Train")
             else:
-                train3D(model, train_loader, loss, optimizer, epoch, writer, evaluator, phase="Train", competitor=args.competitor)
+                train3D(model, train_loader, loss, optimizer, epoch, writer, evaluator, phase="Train")
 
             if rank == 0:
                 val_model = model.module
@@ -155,8 +155,7 @@ def main(experiment_name, args):
                     val_iou, val_dice, val_haus = test3D(val_model, val_loader, epoch, writer, evaluator, phase="Validation")
 
                 if val_iou < 1e-05 and epoch > 15:
-                    logging.info('drop in performances detected. aborting the experiment')
-                    exit(-3)
+                    logging.info('WARNING: drop in performances detected.')
 
                 if scheduler is not None:
                     if optim_name == 'SGD' and scheduler_name == 'Plateau':

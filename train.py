@@ -45,34 +45,38 @@ def train2D(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, p
         writer.add_scalar(f'Loss/{phase}', epoch_train_loss, epoch)
         writer.add_scalar(f'{phase}', epoch_iou, epoch)
 
-    logging.info(
-        f'{phase} Epoch [{epoch}], '
-        f'{phase} Mean Loss: {epoch_train_loss}, '
-        f'{phase} Mean Metric (IoU): {epoch_iou}'
-        f'{phase} Mean Metric (Dice): {epoch_dice}'
-        f'{phase} Mean Metric (haus): {epoch_haus}'
-    )
+    # logging.info(
+    #     f'{phase} Epoch [{epoch}], '
+    #     f'{phase} Mean Loss: {epoch_train_loss}, '
+    #     f'{phase} Mean Metric (IoU): {epoch_iou}'
+    #     f'{phase} Mean Metric (Dice): {epoch_dice}'
+    #     f'{phase} Mean Metric (haus): {epoch_haus}'
+    # )
     return epoch_train_loss, epoch_iou
 
 
-def train3D(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, phase='Train', competitor=False):
-
+def train3D(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, phase='Train'):
     model.train()
     evaluator.reset_eval()
     losses = []
     for i, d in tqdm(enumerate(train_loader), total=len(train_loader), desc=f'{phase} epoch {str(epoch)}'):
-        images = d['data'][tio.DATA].float().cuda()
 
-        if competitor:
-            labels = d['sparse'][tio.DATA].cuda()[:, 0:1]  # sparse gt - temporary option for the competitor
-        else:
-            labels = d['label'][tio.DATA].cuda()
+        images = d['data'][tio.DATA].float().cuda()
+        labels = d['label'][tio.DATA].cuda()
 
         emb_codes = torch.cat((
             d['index_ini'],
             d['index_ini'] + torch.as_tensor(images.shape[-3:])
         ), dim=1).float().cuda()
+
         partition_weights = d['weight'].cuda()
+        gt_count = torch.sum(labels == 1, dim=list(range(1, labels.ndim)))
+        if torch.sum(gt_count) == 0:
+            logging.info(f"skipped iteration {i}/{len(train_loader)} at epoch {epoch} cos all gt volumes were empty\n")
+            continue
+        eps = 1e-10
+        partition_weights = (eps + gt_count) / torch.max(gt_count)  # TODO: set this only when it is not competitor and we are on grid
+        # partition_weights = (eps + gt_count) / torch.sum(gt_count)  # over max tecnique is better
 
         optimizer.zero_grad()
         outputs = model(images, emb_codes)  # output -> B, C, Z, H, W
@@ -105,12 +109,12 @@ def train3D(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, p
         writer.add_scalar(f'Loss/{phase}', epoch_train_loss, epoch)
         writer.add_scalar(f'{phase}', epoch_iou, epoch)
 
-    logging.info(
-        f'{phase} Epoch [{epoch}], '
-        f'{phase} Mean Loss: {epoch_train_loss}, '
-        f'{phase} Mean Metric (IoU): {epoch_iou}'
-        f'{phase} Mean Metric (Dice): {epoch_dice}'
-        f'{phase} Mean Metric (haus): {epoch_haus}'
-    )
+    # logging.info(
+    #     f'{phase} Epoch [{epoch}], '
+    #     f'{phase} Mean Loss: {epoch_train_loss}, '
+    #     f'{phase} Mean Metric (IoU): {epoch_iou}'
+    #     f'{phase} Mean Metric (Dice): {epoch_dice}'
+    #     f'{phase} Mean Metric (haus): {epoch_haus}'
+    # )
 
     return epoch_train_loss, epoch_iou

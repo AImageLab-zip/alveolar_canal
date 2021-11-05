@@ -111,12 +111,13 @@ def test2D(model, test_loader, epoch, writer, evaluator, phase, splitter):
         writer.add_scalar(f'{phase}/Dice', epoch_dice, epoch)
         writer.add_scalar(f'{phase}/Hauss', epoch_haus, epoch)
 
-    logging.info(
-        f'{phase} Epoch [{epoch}], '
-        f'{phase} Mean Metric (IoU): {epoch_iou}'
-        f'{phase} Mean Metric (Dice): {epoch_dice}'
-        f'{phase} Mean Metric (haus): {epoch_haus}'
-    )
+    if phase in ['Test', 'Final']:
+        logging.info(
+            f'{phase} Epoch [{epoch}], '
+            f'{phase} Mean Metric (IoU): {epoch_iou}'
+            f'{phase} Mean Metric (Dice): {epoch_dice}'
+            f'{phase} Mean Metric (haus): {epoch_haus}'
+        )
 
     return epoch_iou, epoch_dice, epoch_haus
 
@@ -199,11 +200,12 @@ def test3D(model, test_loader, epoch, writer, evaluator, phase):
         writer.add_scalar(f'{phase}/Dice', epoch_dice, epoch)
         writer.add_scalar(f'{phase}/Hauss', epoch_haus, epoch)
 
-    logging.info(
-        f'{phase} Epoch [{epoch}], '
-        f'{phase} Mean Metric (IoU): {epoch_iou}'
-        f'{phase} Mean Metric (Dice): {epoch_dice}'
-        f'{phase} Mean Metric (haus): {epoch_haus}'
-    )
+    if phase in ['Test', 'Final']:
+        logging.info(
+            f'{phase} Epoch [{epoch}], '
+            f'{phase} Mean Metric (IoU): {epoch_iou}'
+            f'{phase} Mean Metric (Dice): {epoch_dice}'
+            f'{phase} Mean Metric (haus): {epoch_haus}'
+        )
 
     return epoch_iou, epoch_dice, epoch_haus

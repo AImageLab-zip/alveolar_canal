@@ -5,7 +5,7 @@ tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
 seed: 47
 # model configuration
 model:
-  # model class, supported values: RESNET18, RESNET50, Multiscale, transUNet3D, transBTS, PadUNet2D, PosPadUNet3D, PadUNet3D
+  # model class, supported values: RESNET18, RESNET50, Multiscale, transUNet3D, transBTS, PadUNet2D, PosPadUNet3D, PadUNet3D, Competitor
   name: PosPadUNet3D
 
 # trainer configuration
@@ -42,9 +42,9 @@ lr_scheduler:
 
 data-loader:
   # data loaders configuration
-  batch_size: 2
+  batch_size: 3
   num_workers: 0
-  # split_filepath: '/nas/softechict-nas-2/mcipriano/splits/main_train.json'
+  # split_filepath: '/nas/softechict-nas-2/mcipriano/splits/main_finetuning.json'
   split_filepath: '/homes/mcipriano/projects/alveolar_canal/configs/fake_split.json'
 
   file_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
@@ -73,9 +73,9 @@ data-loader:
     - 304
 
   patch_shape:
-    - 120
-    - 120
-    - 120
+    - 80
+    - 80
+    - 80
 
   samples_per_volume: 8
   sampler_type: grid # valid types: grid, by_label

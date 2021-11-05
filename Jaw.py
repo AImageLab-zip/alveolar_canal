@@ -28,8 +28,8 @@ class Jaw:
         self.dicom_dir = read_dicomdir(os.path.join(dicomdir_path))
         self.filenames, self.dicom_files, self.raw_volume = dicom_from_dicomdir(self.dicom_dir)
 
-        w = self.dicom_files[5].WindowWidth
-        c = self.dicom_files[5].WindowCenter
+        w = self.dicom_files[0].WindowWidth
+        c = self.dicom_files[0].WindowCenter
         ymax = c + (w / 2)
         ymin = c - (w / 2)
 

@@ -60,6 +60,7 @@ class Eval:
 
         pred = pred[None, ...] if pred.ndim == 3 else pred
         gt = gt[None, ...] if gt.ndim == 3 else gt
+        images = images[None, ...] if images.ndim == 3 else images
         assert pred.ndim == gt.ndim, f"Gt and output dimensions are not the same before eval. {pred.ndim} vs {gt.ndim}"
 
         excluded = ['BACKGROUND', 'UNLABELED']

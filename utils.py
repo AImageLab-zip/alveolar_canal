@@ -1,4 +1,5 @@
 from torch.utils.data import DistributedSampler
+import pathlib
 import torch.utils.data as data
 from torch.utils.data import SubsetRandomSampler
 import torchio as tio
@@ -18,10 +19,13 @@ from models.TransBTS.TransBTS_downsample8x_skipconnection import TransBTS
 from models.ResidualEncoder import ResNetEncoder
 from models.ResNet50.ResNet50 import ResNet50
 from models.Multiscale.Multiscale import Multiscale3D
+from models.Competitor import Competitor
 import sys
 from Jaw import Jaw
 import torch
 from tqdm import tqdm
+import SimpleITK as sitk
+import json
 
 
 def create_split(dataset_path):
@@ -172,6 +176,8 @@ def load_model(config):
         return ResNetEncoder(n_classes=num_classes), "3D"
     elif model_config['name'] == 'RESNET50':
         return ResNet50(out_channels=num_classes), "3D"
+    elif model_config['name'] == 'Competitor':
+        return Competitor(n_classes=num_classes), "3D"
     else:
         raise Exception("Model not found, check the config.yaml")
 
@@ -486,7 +492,7 @@ class Splitter:
         return self.batch_size
 
 
-def load_dataset(config, rank, world_size, is_distributed, train_type="2D"):
+def load_dataset(config, rank, world_size, is_distributed, train_type="2D", is_competitor=False):
     from loaders.dataset2D import AlveolarDataloader
     from loaders.dataset3D import Loader3D
     loader_config = config.get('data-loader', None)
@@ -528,7 +534,7 @@ def load_dataset(config, rank, world_size, is_distributed, train_type="2D"):
                 collate_fn=alveolar_data.custom_collate
             )
     elif train_type == "3D":
-        data_utils = Loader3D(loader_config, train_config.get("do_train", None), train_config.get("additional_dataset", None))
+        data_utils = Loader3D(loader_config, train_config.get("do_train", None), train_config.get("additional_dataset", None), is_competitor)
         train_d, test_d, val_d = data_utils.split_dataset()
         splitter = None
 
@@ -538,7 +544,7 @@ def load_dataset(config, rank, world_size, is_distributed, train_type="2D"):
                 train_d,
                 max_length=samples_per_volume * 4,  # queue len
                 samples_per_volume=samples_per_volume,
-                sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'),loader_config.get('grid_overlap', 0)),
+                sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'), loader_config.get('grid_overlap', 0)),
                 num_workers=loader_config['num_workers'],
             )
             sampler = DistributedSampler(train_queue, shuffle=False) if is_distributed else None
@@ -552,5 +558,97 @@ def load_dataset(config, rank, world_size, is_distributed, train_type="2D"):
 
     return train_loader, test_loader, val_loader, splitter
 
+
+def resample(ctvol, is_label, original_spacing=.3, out_spacing=.4):
+    original_spacing = (original_spacing, original_spacing, original_spacing)
+    out_spacing = (out_spacing, out_spacing, out_spacing)
+
+    ctvol_itk = sitk.GetImageFromArray(ctvol)
+    ctvol_itk.SetSpacing(original_spacing)
+    original_size = ctvol_itk.GetSize()
+    out_shape = [int(np.round(original_size[0] * (original_spacing[0] / out_spacing[0]))),
+                 int(np.round(original_size[1] * (original_spacing[1] / out_spacing[1]))),
+                 int(np.round(original_size[2] * (original_spacing[2] / out_spacing[2])))]
+
+    # Perform resampling:
+    resample = sitk.ResampleImageFilter()
+    resample.SetOutputSpacing(out_spacing)
+    resample.SetSize(out_shape)
+    resample.SetOutputDirection(ctvol_itk.GetDirection())
+    resample.SetOutputOrigin(ctvol_itk.GetOrigin())
+    resample.SetTransform(sitk.Transform())
+    resample.SetDefaultPixelValue(ctvol_itk.GetPixelIDValue())
+
+    if is_label:
+        resample.SetInterpolator(sitk.sitkNearestNeighbor)
+    else:
+        resample.SetInterpolator(sitk.sitkBSpline)
+    resampled_ctvol = resample.Execute(ctvol_itk)
+    return sitk.GetArrayFromImage(resampled_ctvol)
+
 if __name__ == '__main__':
-    fix_dataset_folder(r'Y:\work\datasets\maxillo\nuovi')
+    split_filepath = "/nas/softechict-nas-2/mcipriano/splits/main_train.json"
+    with open(split_filepath) as f:
+        folder_splits = json.load(f)
+
+    # for split in ['train', 'syntetic', 'val']:
+    for split in ['syntetic', 'val']:
+        saving_dir = "/nas/softechict-nas-2/mcipriano/datasets/maxillo/competitor/"
+        dirs = [os.path.join('/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE', p) for p in folder_splits[split]]
+
+        dataset = {'data': [], 'gt': []}
+        for i, dir in tqdm(enumerate(dirs), total=len(dirs), desc=f"processing {split}"):
+            gt_dir = os.path.join(dir, 'syntetic.npy')
+            data_dir = os.path.join(dir, 'data.npy')
+
+            image = np.load(data_dir)
+            gt = np.load(gt_dir)
+
+            # rescale
+            DICOM_MAX = 3095
+            DICOM_MIN = 0
+            image = np.clip(image, DICOM_MIN, DICOM_MAX)
+            image = (image.astype(float) + DICOM_MIN) / (DICOM_MAX + DICOM_MIN)   # [0-1] with shifting
+
+            image = resample(image, is_label=False)
+            gt = resample(gt, is_label=True)
+
+            s = tio.Subject(
+                data=tio.ScalarImage(tensor=image[None]),
+                label=tio.LabelMap(tensor=gt[None]),
+            )
+
+            grid_sampler = tio.inference.GridSampler(
+                s,
+                patch_size=(32, 32, 32),
+                patch_overlap=(10, 10, 10),
+            )
+
+            patch_loader = torch.utils.data.DataLoader(grid_sampler, batch_size=1)
+            for a in patch_loader:
+                image = a['data'][tio.DATA].squeeze().numpy()
+                gt = a['label'][tio.DATA].squeeze().numpy()
+                if np.sum(gt) != 0:
+                    dataset['data'].append(image)
+                    dataset['gt'].append(gt)
+
+        log_dir = pathlib.Path(os.path.join(saving_dir, split))
+        log_dir.mkdir(parents=True, exist_ok=True)
+        np.save(os.path.join(saving_dir, split, 'data.npy'), np.stack(dataset['data']))
+        np.save(os.path.join(saving_dir, split, 'gt.npy'), np.stack(dataset['gt']))
+        print(f"split {split} completed. created {len(dataset['data'])} subvolumes")
+
+    print("subvolumes for training have been created!")
+    # TODO: fare shuffle dei volumi
+    # os.mkdir(os.path.join(saving_dir, 'test'))
+    # # rescale
+    # DICOM_MAX = 3095
+    # DICOM_MIN = 0
+    # image = np.clip(image, DICOM_MIN, DICOM_MAX)
+    # image = (image.astype(float) + DICOM_MIN) / (DICOM_MAX + DICOM_MIN)  # [0-1] with shifting
+    #
+    # image = resample(image, is_label=False)
+    # gt = resample(gt, is_label=True)
+
+    # TODO: per test prendere i volumi e semplicemente fare resampling e salvarli in /vol_0.4
+    # TODO: prima di salvarli fare clip
