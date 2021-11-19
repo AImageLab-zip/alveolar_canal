@@ -13,7 +13,7 @@ trainer:
   # path to the checkpoint directory
   checkpoint_path: null
   # skip train or do train?
-  do_train: True
+  do_train: False
   # possible additional datasets: null, Naive, Generated
   additional_dataset: Naive
   # how many iterations between validations
@@ -68,9 +68,9 @@ data-loader:
 
   # KEEP IN MIND: SCALE RATIOS SHOULD BE AROUND (0.4568, 0.8733, 1)
   resize_shape:
-    - 136
-    - 256
-    - 304
+    - 168
+    - 280
+    - 360
 
   patch_shape:
     - 80

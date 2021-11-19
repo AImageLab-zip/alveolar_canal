@@ -6,6 +6,8 @@ from scipy.ndimage import rotate, map_coordinates, gaussian_filter
 import torchvision.transforms.functional as TF
 import cv2
 from torch.nn.functional import interpolate
+from torch.nn.functional import pad
+
 
 class ToPilImage:
 
@@ -345,3 +347,39 @@ class CenterCrop:
             gt = gt[..., z_offset[0]:z_offset[1], y_offset[0]:y_offset[1], x_offset[0]:x_offset[1]]
             return crop_img, gt
         return crop_img
+
+
+class CropAndPad:
+
+    def __init__(self, target_shape, pad_val=None):
+        self.target_shape = target_shape
+        self.pad_val = pad_val
+
+    def __call__(self, image):
+        was_numpy = not torch.is_tensor(image)
+
+        # CROPPING
+        z_offset = max(image.shape[-3] - self.target_shape[0], 0)
+        y_offset = max(image.shape[-2] - self.target_shape[1], 0)
+        x_offset = max(image.shape[-1] - self.target_shape[2], 0)
+        z_offset = int(np.floor(z_offset / 2.)), image.shape[-3] - int(np.ceil(z_offset / 2.))
+        y_offset = int(np.floor(y_offset / 2.)), image.shape[-2] - int(np.ceil(y_offset / 2.))
+        x_offset = int(np.floor(x_offset / 2.)), image.shape[-1] - int(np.ceil(x_offset / 2.))
+
+        img = image[..., z_offset[0]:z_offset[1], y_offset[0]:y_offset[1], x_offset[0]:x_offset[1]]
+
+        # PADDING
+        z_offset = -min(image.shape[-3] - self.target_shape[0], 0)
+        y_offset = -min(image.shape[-2] - self.target_shape[1], 0)
+        x_offset = -min(image.shape[-1] - self.target_shape[2], 0)
+        z_offset = int(np.floor(z_offset / 2.)), z_offset - int(np.floor(z_offset / 2.))
+        y_offset = int(np.floor(y_offset / 2.)), y_offset - int(np.floor(y_offset / 2.))
+        x_offset = int(np.floor(x_offset / 2.)), x_offset - int(np.floor(x_offset / 2.))
+
+        img = img if torch.is_tensor(img) else torch.from_numpy(img)
+        self.pad_val = self.pad_val if self.pad_val else img.min()
+        img = pad(img, (x_offset[0], x_offset[1], y_offset[0], y_offset[1], z_offset[0], z_offset[1]), value=self.pad_val)
+
+        if was_numpy:
+            return img.numpy()
+        return img

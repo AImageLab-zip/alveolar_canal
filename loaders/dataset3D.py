@@ -3,7 +3,7 @@ import numpy as np
 from torchvision import transforms
 import os
 from matplotlib import pyplot as plt
-from augmentations import RandomRotate, RandomContrast, ElasticDeformation, Normalize, ToTensor, CenterPad, RandomVerticalFlip, Resize, Rescale
+from augmentations import RandomRotate, RandomContrast, ElasticDeformation, Normalize, ToTensor, CenterPad, RandomVerticalFlip, Resize, Rescale, CropAndPad
 import torch
 import json
 from tqdm import tqdm
@@ -55,9 +55,6 @@ class Loader3D():
             logging.info("training is going to be skipped")
         else:
             if self.additional_dataset:
-                # train_len, syntetic_len = len(folder_splits['train']), len(folder_splits['syntetic'])
-                # self.split_weights['train'] = 1 - train_len / (train_len + syntetic_len)
-                # self.split_weights['syntetic'] = 1 - syntetic_len / (train_len + syntetic_len)
                 logging.info(f"using syntetic dataset -> {self.additional_dataset}")
             else:
                 folder_splits['syntetic'] = []
@@ -81,7 +78,7 @@ class Loader3D():
                 data = np.load(data_path)
                 gt = np.load(gt_path)
 
-                assert np.max(data) > 1  # data should not be normalized by default
+                assert np.max(data) > 1  # data should NOT be normalized by default
                 assert np.unique(gt).size <= len(self.config['labels'])
 
                 self.subjects[partition].append(
@@ -110,26 +107,19 @@ class Loader3D():
         data = np.clip(data, self.dicom_min, self.dicom_max)
         data = (data.astype(np.float) + self.dicom_min) / (self.dicom_max + self.dicom_min)   # [0-1] with shifting
 
-        D, H, W = data.shape[-3:]
-        rD, rH, rW = self.reshape_size
-        tmp_ratio = np.array((D/W, H/W, 1))
-        pad_factor = tmp_ratio / np.array((rD/rW, rH/rW, 1))
-        pad_factor /= np.max(pad_factor)
-        new_shape = np.array((D, H, W)) / pad_factor
-        new_shape = np.round(new_shape).astype(np.int)
-
-        data = CenterPad(new_shape)(data)
-        data = Rescale(size=self.reshape_size)(data)
+        safe_gt_check = np.sum(gt)
+        data = CropAndPad(self.reshape_size)(data)
+        gt = CropAndPad(self.reshape_size, pad_val=self.config['labels']['BACKGROUND'])(gt)
+        if safe_gt_check != np.sum(gt):
+            logging.info(f"BIG WARNING: we are missing some GT voxel with this crop! {folder}, {partition}")
 
         gt = gt.astype(np.uint8)
 
         # adding the 4th dim and making it RGB
+        if gt.ndim == 3: gt = gt.reshape(1, *gt.shape)
         if data.ndim == 3: data = np.tile(data.reshape(1, *data.shape), (3, 1, 1, 1))
 
         if partition in ['train', 'syntetic']:
-            gt = CenterPad(new_shape)(gt, pad_val=self.config['labels']['BACKGROUND'])
-            gt = Rescale(size=self.reshape_size, interp_fn='nearest')(gt)
-            if gt.ndim == 3: gt = gt.reshape(1, *gt.shape)
             return tio.Subject(
                 data=tio.ScalarImage(tensor=data),
                 label=tio.LabelMap(tensor=gt),

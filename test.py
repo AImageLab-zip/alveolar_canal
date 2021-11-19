@@ -6,6 +6,7 @@ from augmentations import CenterCrop
 import numpy as np
 import torchio as tio
 import logging
+from augmentations import CropAndPad
 
 
 def test2D(model, test_loader, epoch, writer, evaluator, phase, splitter):
@@ -130,9 +131,12 @@ def test3D(model, test_loader, epoch, writer, evaluator, phase):
         evaluator.reset_eval()
         for i, (subject, loader) in tqdm(enumerate(test_loader), total=len(test_loader), desc='val epoch {}'.format(str(epoch))):
             aggr = tio.inference.GridAggregator(subject, overlap_mode='average')
+            import time
+            start_time = time.time()
             for subvolume in loader:
                 # batchsize with torchio affects the number of grids we extract from a patient.
                 # when we aggragate the patient the volume is just one.
+
                 images = subvolume['data'][tio.DATA].float().cuda()  # BS, 3, Z, H, W
                 emb_codes = subvolume[tio.LOCATION].float().cuda()
 
@@ -141,28 +145,19 @@ def test3D(model, test_loader, epoch, writer, evaluator, phase):
                 aggr.add_batch(output, subvolume[tio.LOCATION])
 
             output = aggr.get_output_tensor()  # C, Z, H, W
+            print("--- %s seconds ---" % (time.time() - start_time))
             labels = np.load(subject[0]['gt_path'])  # original labels from storage
             images = np.load(subject[0]['data_path'])  # high resolution image from storage
 
-            D, H, W = labels.shape[-3:]
-            rD, rH, rW = output.shape[-3:]
-            tmp_ratio = np.array((D / W, H / W, 1))
-            pad_factor = tmp_ratio / np.array((rD / rW, rH / rW, 1))
-            pad_factor /= np.max(pad_factor)
-            reshape_size = np.array((D, H, W)) / pad_factor
-            reshape_size = np.round(reshape_size).astype(np.int)
-
-            # BS=1, after interpolate we can have (classes, Z, H, W) or (Z, H, W) if classes = 1
-            output = interpolate(output.unsqueeze(0), size=tuple(reshape_size), mode='trilinear', align_corners=False).squeeze()
-            output = CenterCrop((D, H, W))(output)
+            orig_shape = labels.shape[-3:]
+            output = CropAndPad(orig_shape)(output).squeeze()  # keep pad_val = min(output) since we are dealing with probabilities
 
             # final predictions
             if output.ndim > 3:
                 output = torch.argmax(torch.nn.Softmax(dim=0)(output), dim=0).numpy()
             else:
                 output = nn.Sigmoid()(output)  # BS, 1, Z, H, W
-                output[output > .5] = 1
-                output[output != 1] = 0
+                output = torch.where(output > .5, 1, 0)
                 output = output.squeeze().cpu().detach().numpy()  # BS, Z, H, W
 
             evaluator.compute_metrics(output, labels, images, subject[0]['folder'], phase)
@@ -174,7 +169,7 @@ def test3D(model, test_loader, epoch, writer, evaluator, phase):
             #     unempty_idx = np.argwhere(np.sum(labels != config['labels']['BACKGROUND'], axis=(0, 2)) > 0)
             #     randidx = np.random.randint(0, unempty_idx.size - 1, 5)
             #     rand_unempty_idx = unempty_idx[randidx].squeeze()  # random slices from unempty ones
-            #
+            #ok
             #     dump_img = np.concatenate(np.moveaxis(images[:, rand_unempty_idx], 0, 1))
             #
             #     dump_gt = np.concatenate(np.moveaxis(labels[:, rand_unempty_idx], 0, 1))
