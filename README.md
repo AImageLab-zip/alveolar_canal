@@ -1,115 +1,185 @@
-# Improving Segmentation of the Inferior Alveolar Nerve through Deep Label Propagation
+Improving Segmentation of the Inferior Alveolar Nerve through Deep Label Propagation
+========
+<figure>
+ <img style="float: left" src="imgs/frontside.jpg" alt="Side view" width="100%">
+ <figcaption><em>Front and side views of a densely annotated IAN</em></figcaption>
+</figure>
 
-This repository contains the material from the paper "Improving Segmentation of the Inferior Alveolar Nerve through Deep Label Propagation".
 
-In particular, this repo is dedicated to the 3D neural network for the alveolar canal segmentation.
-our new 3D dense dataset can be downloaded [here](#linkhere).
+## Introduction
+This repository contains the material from the paper "Improving Segmentation of
+the Inferior Alveolar Nerve through Deep Label Propagation". In particular, this
+repo is dedicated to the 3D neural networks used to generate and segment the
+Inferior Alveolar Nerve (IAN).
+This nerve is oftentimes in close relation
+to the roots of molars, and its position must thus be carefully
+detailed before the surgical removal. As avoiding contact
+with the IAN is a primary concern during these operations,
+segmentation plays a key role in surgical preparations.
 
-## Usage
-you can run the experiments as follow:
+## IAN Segmentation and Label Propagation
+For the IAN segmentation, we adopted a modified version of U-NET 3D, enriched
+with a 2 pixels padding and an embedding of the coordinates of the sub-volumes
+fed in the net. Because of the heavy burden represented by manual annotation of
+segmentation ground thruth we also employed the same neural network to expand
+our dataset by having a dense annotation for all the volumes in our dataset in
+order to have more data for the training phase of the main task. The training
+phase of the segmentation network, is divided in 2 phase: first we use the
+sparse annotations with their generated ground thruth as a pretraining and then
+the real dense annotation as a finetuning.
+
+## Dataset
+Before running this project, you need to [download](http://ditto.ing.unimore.it)
+the dataset. Also look at
+[this](https://github.com/AImageLab-zip/New-Maxillo-Dataset-Segmentation) which
+has the code to generate the naive dense labels starting from the sparse
+annotations (Circular Expansion)
+
+## How to run
+Clone this repository, create a python env for the project (optional) and
+activate it. Then install all the dependencies with pip
 ```
-usage: main.py [--base_config path]
-
-optional arguments:
-  --base_config         path to your config.yaml for this experiment
-  --verbose             redirect stream to std out instead of using a log file in the yaml directory
-  --competitor          load training data as circle expansion instead of dense annotations
-  --additional_dataset  load the additional patients
-  --test                skip the training and load best weights for the experiment (no needs to update your yaml file)
-  --skip_dump           if this flag is set the network does not dump prediction volumes on the final test
-  --reload              load the last weights and continue the training (no needs to update your yaml file)
+git clone git@github.com:AImageLab-zip/alveolar_canal.git
+cd alveolar_canal
+python -m venv env
+source env/bin/activate
+pip install -r requirements.txt
 ```
 
-Optional Arguments for the distributed data parallel. note, you must configure your slurm sbatch file to use it
-
+### Run
+Run the project as follows:
 ```
---local_rank              
---dist-backend              
---dist-url
+python main.py [-h] -c CONFIG [--verbose]
+
+arguments:
+  -h, --help            show this help message and exit
+  -c CONFIG, --config CONFIG
+                        the config file used to run the experiment
+  --verbose             To log also to stdout
+```
+E.g. to run the generation experiment, execute:
+```
+python main.py --config configs/gen-training.yaml
 ```
 
-## YAML config example
-Here is an example of a yaml file to use as base_config. The following is the yaml file used in the experiment which obtained the best values 
+## YAML config files
+You can find the config files used to obtain the best result in the config folder.
+Two files are needed: `experiment.yaml`, `augmentations.yaml`. For both the two
+tasks, the best config file is provided:
+- <b>gen-training.yaml</b> for the network which, from the sparse annotation, generate the dense labels
+- <b>seg-pretrain.yaml</b> which train the segmentation network only over the generated labels
+- <b>seg-finetuning.yaml</b> which train the segmentation network over the real dense labels
+Execute `main.py` with these 3 configs in this order to reproduce our results
 
+## Checkpoints
+<em>TODO</em>
+
+
+### experiment.yaml
+`experiment.yaml` describe each part of the project, like the
+network/loss/optimizer, how to load data and so on:
 ```yaml
+# title of the experiment
+title: canal_generator_train
+# Where to output everything, in this path a folder with
+# the same name as the title is created containing checkpoints,
+# logs and a copy of the config used
+project_dir: '/path/to/results'
+seed: 47
+tensorboard_dir: /path/to/tensorboard
 
-data-loader:
-  augmentations_file: /augmentations_files/myfile.yaml
+# which experiment to execute: Segmentation or Generation
+experiment:
+  name: Generation
+
+data_loader:
+  dataset: /path/to/maxillo
+  # null to use training_set, generated to used the generated dataset
+  training_set: null
+  # which augmentations to use, see: augmentations.yaml
+  augmentations: configs/augmentations.yaml
   background_suppression: 0
-  batch_size: 6
-  file_path: /datasets/maxillo/DENSE
+  batch_size: 2
   labels:
     BACKGROUND: 0
     INSIDE: 1
   mean: 0.08435
-  num_workers: 4
+  num_workers: 8
+  # shape of a single patch
   patch_shape:
-  - 80
-  - 80
-  - 80
+  - 120
+  - 120
+  - 120
+  # reshape of the whole volume before extracting the patches
   resize_shape:
   - 168
   - 280
   - 360
   sampler_type: grid
-  sparse_path: datasets/maxillo/SPARSE
-  split_filepath: /splits/main_finetuning.json
+  grid_overlap: 0
   std: 0.17885
   volumes_max: 2100
   volumes_min: 0
   weights:
   - 0.000703
   - 0.999
-loss:
-  name: Jaccard
-lr_scheduler:
-  name: Plateau
+
+# which network to use
 model:
   name: PosPadUNet3D
+
+loss:
+  name: Jaccard
+
+lr_scheduler:
+  name: Plateau
+
 optimizer:
   learning_rate: 0.1
   name: SGD
-seed: 47
-tb_dir: /nas/runs
-title: best_experiment
+
 trainer:
-  additional_dataset: null
-  checkpoint_path: pretraining/best.pth
-  do_train: true
+  # Reload the last checkpoints?
+  reload: True
+  checkpoint: /path/to/checkpoints/last.pth
+  # train the network
+  do_train: True
+  # do a single test of the network with the loaded checkpoints
+  do_test: False
+  # generate the synthetic dense dataset
+  do_inference: False
   epochs: 100
-  validate_after_iters: 2
 ```
 
-In addiction we created a factory for Augmentation which allows you to load augmentations from a yaml file.
-the following example can help you to make your own file. In our experiments we just used RandomFlip on all axes.
-
+### augmentations.yaml
+`augmentations.yaml` defines which type of augmentations use during training.
+Two different augmentations files have been used, one for the segmentation task,
+one for the generation task.
+The file should follow this structure:
 ```yaml
 RandomAffine:
-  scales: !!python/tuple [0.8, 1.2]
-  degrees: !!python/tuple [15, 15]
+  scales: !!python/tuple [0.5, 1.5]
+  degrees: !!python/tuple [10, 10]
   isotropic: false
   image_interpolation: linear
-  p: 0.35
-RandomElasticDeformation:
-    num_control_points: 7
-    p: 0.35
+  p: 0.5
 RandomFlip:
   axes: 2
   flip_probability: 0.7
-RandomBlur:
-  p: 0.25
 ```
 
-## Directories
-Each experiment is expected to be placed into a result dir:
-
+## Cite
 ```
-results/
-├─ experiment_name/
-│  ├─ checkpoints/
-│  ├─ logs/
-│  │  ├─ config.yaml
-│  ├─ numpy/
-
+@inproceedings{
+  cipriano2022improving,
+  title={Improving Segmentation of the Inferior Alveolar Nerve through Deep Label Propagation},
+  author={Cipriano, Marco and Allegretti, Stefano and Bolelli, Federico and Pollastri, Federico and Grana, Costantino},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year=2022,
+  month={jun},
+  venue={New Orleans, USA},
+  publisher={IEEE},
+  doi={},
+}
 ```
-If experiment_name does not exist, python will look for a *config.yaml* file in a *config* folder in your project directory.
+
