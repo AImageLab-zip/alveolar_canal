@@ -8,13 +8,13 @@ import pandas as pd
 import zipfile
 
 class Eval:
-    def __init__(self, loader_config, project_dir, skip_dump=False):
+    def __init__(self, config, skip_dump=False):
         self.iou_list = []
         self.dice_list = []
-        self.config = loader_config
-        self.project_dir = project_dir
+        self.config = config
+        self.project_dir = self.config.project_dir
         self.eps = 1e-06
-        self.classes = loader_config['labels']
+        self.classes = self.config.data_loader.labels
         self.hausdord_splits = 6
         self.hausdord_verbose = []
         self.hausdorf_list = []
@@ -36,6 +36,7 @@ class Eval:
         dice = 0 if len(self.dice_list) == 0 else mean(self.dice_list)
         haus = 0 if len(self.hausdorf_list) == 0 else max(self.hausdorf_list)
 
+        # Save to excel
         if phase == "Final":
             excl_dest = os.path.join(self.project_dir, 'logs', 'results.xlsx')
             cols = [f"s{n}" for n in range(self.hausdord_splits - 1)] + ["L entire"] + [f"s{n}" for n in range(self.hausdord_splits - 1)] + ["R entire"]
@@ -54,9 +55,20 @@ class Eval:
         self.reset_eval()
         return iou, dice, haus
 
+    # TODO: can this be moved to gpu?
     def compute_metrics(self, pred, gt, images, names, phase):
+
         if phase not in ["Train", "Validation", "Test", "Final"]:
             raise Exception(f"this phase is not valid {phase}")
+
+        if isinstance(pred, torch.Tensor):
+            pred = pred.detach().cpu().numpy()
+
+        if isinstance(gt, torch.Tensor):
+            gt = gt.detach().cpu().numpy()
+
+        if isinstance(images, torch.Tensor):
+            images = images.detach().cpu().numpy()
 
         pred = pred[None, ...] if pred.ndim == 3 else pred
         gt = gt[None, ...] if gt.ndim == 3 else gt
@@ -69,8 +81,9 @@ class Eval:
         self.test_ids += names
 
         for batch_id in range(pred.shape[0]):
-            self.iou_list.append(self.iou(pred[batch_id], gt[batch_id], labels))
-            self.dice_list.append(self.dice_coefficient(pred[batch_id], gt[batch_id], labels))
+            iou, dice = self.iou_and_dice(pred[batch_id], gt[batch_id], labels)
+            self.iou_list.append(iou)
+            self.dice_list.append(dice)
             self.hausdorf_list.append(self.hausdorf(pred[batch_id], gt[batch_id], phase))
             if phase == 'Final' and not self.skip_dump:
                 self.dump(gt[batch_id], pred[batch_id], images[batch_id], names[batch_id])
@@ -101,6 +114,30 @@ class Eval:
             self.hausdord_verbose.append(np.round(np.concatenate((left, right)).astype(float), 2))
 
         return metrics.hausdorff_distance(gt, pred) * pixel_spacing
+
+    def iou_and_dice(self, pred, gt, labels):
+        """
+        :param image: SHAPE MUST BE (Z, H W) or (BS, Z, H, W)
+        :param gt: SHAPE MUST BE (Z, H W) or (BS, Z, H, W)
+        :return:
+        """
+        iou_score = []
+        dice_score = []
+        gt = gt.flatten()
+        pred = pred.flatten()
+        for c in labels:
+            gt_class_idx = np.argwhere(gt == c)
+            intersection = np.sum(pred[gt_class_idx] == c)
+
+            dice_union = np.argwhere(gt == c).size + np.argwhere(pred == c).size
+            iou_union = dice_union - intersection
+
+            dice_score.append((2 * intersection + self.eps) / (dice_union + self.eps))
+            iou_score.append((intersection + self.eps) / (iou_union + self.eps))
+
+        iou_score = sum(iou_score)/len(labels)
+        dice_score = sum(dice_score)/len(labels)
+        return iou_score, dice_score
 
     def iou(self, pred, gt, labels):
         """

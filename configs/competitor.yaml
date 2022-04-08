@@ -1,0 +1,61 @@
+title: competitor
+project_dir: '/homes/llumetti/results'
+# job define what the network has to do:
+# segmentation means that the network should do a the segmentation of the
+# alveolar canal, so it takes as input only the data
+# generation means that the network should generate the synthetic data from the
+# sparse dataset, in this case the network will take as input data+sparse
+# STILL UNUSED
+job: segmentation
+
+data_loader:
+  dataset: configs/dataset.yaml
+  augmentations: configs/augmentations.yaml
+  background_suppression: 0
+  batch_size: 6
+  labels:
+    BACKGROUND: 0
+    INSIDE: 1
+  mean: 0.08435
+  num_workers: 4
+  patch_shape:
+  - 80
+  - 80
+  - 80
+  resize_shape:
+  - 168
+  - 280
+  - 360
+  std: 0.17885
+  volumes_max: 2100
+  volumes_min: 0
+  weights:
+  - 0.000703
+  - 0.999
+  sampler_type: grid
+  grid_overlap: 0
+
+model:
+  name: PosPadUNet3D
+
+loss:
+  name: Jaccard
+
+lr_scheduler:
+  name: Plateau
+
+optimizer:
+  learning_rate: 0.1
+  name: SGD
+
+seed: 47
+tensorboard_dir: '/homes/llumetti/maxillo/tensorboard'
+
+trainer:
+  additional_dataset: null
+  checkpoint_dir: '/homes/llumetti/maxillo/checkpoints'
+  reload: True
+  do_train: True
+  epochs: 100
+  validate_after_iters: 2
+
