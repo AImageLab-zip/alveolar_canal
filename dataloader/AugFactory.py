@@ -21,6 +21,7 @@ class ToPilImage:
         return [image, mask]
 
 
+# Already exists in tio: RandomFlip
 class RandomHorizontalFlip:
 
     def __init__(self, execution_probability=0.5):
@@ -35,6 +36,7 @@ class RandomHorizontalFlip:
         return data
 
 
+# Already exists in tio: RandomFlip
 class RandomVerticalFlip:
 
     def __init__(self, execution_probability=0.5):
@@ -349,14 +351,26 @@ class CenterCrop:
             return crop_img, gt
         return crop_img
 
+class CropAndPad(tio.Transform):
 
-class CropAndPad:
-
-    def __init__(self, target_shape, pad_val=None):
+    def __init__(self, target_shape):
         self.target_shape = target_shape
-        self.pad_val = pad_val
+        super().__init__()
 
-    def __call__(self, image):
+    def apply_transform(self, image):
+        print(f'rescaling img from {image.shape} to {self.target_shape}')
+        batch = len(image.shape) == 4
+
+        if batch and image.shape[0] != 1:
+            raise SystemExit
+
+        if batch:
+            image.squeeze(0)
+
+        self.pad_val = None
+        if isinstance(image, tio.LabelMap):
+            # self.pad_val = self.config['labels']['BACKGROUND']
+            self.pad_val = 0
         was_numpy = not torch.is_tensor(image)
 
         # CROPPING
@@ -383,7 +397,11 @@ class CropAndPad:
 
         if was_numpy:
             return img.numpy()
+        if batch:
+            img.unsqueeze(0)
         return img
+
+# TODO: change this pls
 class AugFactory:
     def __init__(self, aug_list):
         self.aug_list = aug_list
@@ -399,7 +417,8 @@ class AugFactory:
                     kwargs = {}
                     for param, value in auglist[aug].items():
                         kwargs[param] = value
-                    transforms.append(getattr(tio, aug)(**kwargs))
+                    t = getattr(tio, aug)(**kwargs)
+                    transforms.append(t)
                 except:
                     raise Exception(f"this transform is not valid: {aug}")
         return transforms
@@ -409,4 +428,8 @@ class AugFactory:
         return the transform object
         :return:
         """
-        return tio.Compose(self.transforms)
+        transf = tio.Compose([
+            tio.CropOrPad((168, 280, 360), padding_mode=0),
+            tio.Compose(self.transforms)
+            ])
+        return transf

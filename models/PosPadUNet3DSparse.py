@@ -13,11 +13,11 @@ def initialize_weights(*models):
                 module.weight.data.fill_(1)
                 module.bias.data.zero_()
 
-class PosPadUNet3D(nn.Module):
-    def __init__(self, n_classes, emb_shape, in_ch):
+class PosPadUNet3DSparse(nn.Module):
+    def __init__(self, n_classes, emb_shape, in_ch=2):
         self.n_classes = n_classes
         self.in_ch = in_ch
-        super(PosPadUNet3D, self).__init__()
+        super(PosPadUNet3DSparse, self).__init__()
 
         self.emb_shape = torch.as_tensor(emb_shape)
         self.pos_emb_layer = nn.Linear(6, torch.prod(self.emb_shape).item())
@@ -53,7 +53,10 @@ class PosPadUNet3D(nn.Module):
                 nn.ReLU()
         )
 
-    def forward(self, x, emb_codes):
+    def forward(self, x, sparse, emb_codes):
+        if self.in_ch == 2:
+            x = torch.stack((x[:, 0], sparse[:, 0]), dim=1)
+
         h = self.ec0(x)
         feat_0 = self.ec1(h)
         h = self.pool0(feat_0)

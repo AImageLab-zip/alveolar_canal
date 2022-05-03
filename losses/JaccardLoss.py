@@ -19,11 +19,12 @@ class JaccardLoss(torch.nn.Module):
             pred = torch.sigmoid(pred)
 
         batch_size = pred.size()[0]
-        eps = 1e-3
+        eps = 1e-6
         if not self.per_volume:
             batch_size = 1
         dice_gt = gt.contiguous().view(batch_size, -1).float()
         dice_pred = pred.contiguous().view(batch_size, -1)
         intersection = torch.sum(dice_pred * dice_gt, dim=1)
-        loss = 1 - (intersection + eps) / (torch.sum(dice_pred + dice_gt, dim=1) - intersection + eps)
+        union = torch.sum(dice_pred + dice_gt, dim=1) - intersection
+        loss = 1 - (intersection + eps) / (union + eps)
         return loss
