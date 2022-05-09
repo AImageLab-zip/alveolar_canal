@@ -1,0 +1,9 @@
+RandomAffine:
+  scales: !!python/tuple [0.5, 1.5]
+  degrees: !!python/tuple [10, 10]
+  isotropic: false
+  image_interpolation: linear
+  p: 0.5
+RandomFlip:
+  axes: 2
+  flip_probability: 0.7
