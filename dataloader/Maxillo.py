@@ -48,9 +48,9 @@ class Maxillo(tio.SubjectsDataset):
                 # TODO: add naive volume
                 if split == 'synthetic':
                     dense_path = sparse_dir / patient / 'generated.npy'
-                    logging.warn(f'No dense file for the synthetic patient {patient}! Are you generating it?')
-                    logging.warn(f'Random data will be loaded, no worries if you are doing the deep expansion!')
-                    if not dense_path.is_file() and split == 'synthetic':
+                    if not dense_path.is_file():
+                        logging.warn(f'No dense file for the synthetic patient {patient}! Are you generating it?')
+                        logging.warn(f'Random data will be loaded, no worries if you are doing the deep expansion!')
                         dense_path = sparse_dir / patient / 'data.npy'
 
                 if not data_path.is_file():
