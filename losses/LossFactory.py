@@ -7,6 +7,7 @@ from .DiceLoss import DiceLoss
 from .JaccardLoss import JaccardLoss
 from .CrossEntropyLoss import CrossEntropyLoss
 from .BCEWithLogitsLoss import BCEWithLogitsLoss
+from .BoundaryLoss import BoundaryLoss
 
 class LossFactory:
     def __init__(self, names, classes, weights=None):
@@ -14,6 +15,7 @@ class LossFactory:
         if not isinstance(self.names, list):
             self.names = [self.names]
 
+        print(f'Losses used: {self.names}')
         self.classes = classes
         self.weights = weights
         self.losses = []
@@ -27,9 +29,11 @@ class LossFactory:
         elif name == 'BCEWithLogitsLoss':
             loss_fn = BCEWithLogitsLoss(self.weights)
         elif name == 'Jaccard':
-            loss_fn = JaccardLoss(weight=self.weights, apply_sigmoid=True, per_volume=True)
+            loss_fn = JaccardLoss(weight=self.weights)
         elif name == 'DiceLoss':
             loss_fn = DiceLoss(self.classes)
+        elif name == 'BoundaryLoss':
+            loss_fn = BoundaryLoss()
         else:
             raise Exception(f"Loss function {name} can't be found.")
 
@@ -52,4 +56,5 @@ class LossFactory:
                 raise ValueError(f'Loss {lossfn} has some NaN')
             loss = loss * partition_weights
             cur_loss.append(loss.mean())
+            print(f'{lossfn.__class__.__name__}: {loss}')
         return torch.sum(torch.stack(cur_loss))

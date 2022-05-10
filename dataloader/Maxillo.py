@@ -19,8 +19,6 @@ class Maxillo(tio.SubjectsDataset):
         root = Path(root)
         if not isinstance(splits, list):
             splits = [splits]
-#        if 'test' in splits:
-#            transform = tio.CropOrPad((168, 280, 360), padding_mode=0)
 
         subjects_list = self._get_subjects_list(root, splits)
         super().__init__(subjects_list, transform, **kwargs)

@@ -428,7 +428,6 @@ class AugFactory:
         :return:
         """
         transf = tio.Compose([
-            tio.CropOrPad((168, 280, 360), padding_mode=0),
             tio.Compose(self.transforms)
             ])
         return transf

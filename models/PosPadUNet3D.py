@@ -83,4 +83,4 @@ class PosPadUNet3D(nn.Module):
         h = self.dc2(h)
         h = self.dc1(h)
         h = self.final(h)
-        return h
+        return torch.sigmoid(h)
