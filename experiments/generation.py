@@ -76,17 +76,7 @@ class Generation(Experiment):
             loss.backward()
             self.optimizer.step()
 
-            # final predictions
-            # shape B, C, xyz -> softmax -> B, xyz
-            # shape 1, C, xyz -> softmax -> 1, xyz
-            # shape B, 1, xyz -> sigmoid + sqz -> B, xyz
-            # shape B, 1, xyz -> sigmoid + sqz -> xyz
-            if preds.shape[1] > 1:
-                # TODO: Can be optimized? Is Softmax here useless?
-                preds = torch.argmax(torch.nn.Softmax(dim=1)(preds), dim=1)
-            else:
-                preds = (preds > 0).int()
-                preds = preds.squeeze().detach()  # BS, Z, H, W
+            preds = (preds > 0.5).squeeze().detach()  # BS, Z, H, W
 
             gt = gt.squeeze()  # BS, Z, H, W
             self.evaluator.compute_metrics(preds, gt)
@@ -146,12 +136,7 @@ class Generation(Experiment):
 
                 loss = self.loss(preds, gt, partition_weights)
                 losses.append(loss.item())
-                if preds.shape[1] > 1:
-                    # TODO: Can be optimized? Is Softmax here useless?
-                    preds = torch.argmax(torch.nn.Softmax(dim=1)(preds), dim=1)
-                else:
-                    preds = (preds > 0).int()
-                    preds = preds.squeeze().detach()  # BS, Z, H, W
+                preds = (preds > 0.5).squeeze().detach()  # BS, Z, H, W
 
                 gt = gt.squeeze()  # BS, Z, H, W
                 self.evaluator.compute_metrics(preds, gt)
@@ -218,7 +203,7 @@ class Generation(Experiment):
                 losses.append(loss.item())
 
                 output = output.squeeze(0)
-                output = (output > 0).int()
+                output = (output > 0.5).int()
 
                 self.evaluator.compute_metrics(output, gt)
 
@@ -268,7 +253,7 @@ class Generation(Experiment):
 
                 output = aggregator.get_output_tensor()
                 output = output.squeeze(0)
-                output = (output > 0).int()
+                output = (output > 0.5).int()
                 output = output.detach().cpu().numpy()  # BS, Z, H, W
 
                 np.save(file_path, output)
