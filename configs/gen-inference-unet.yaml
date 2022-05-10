@@ -51,6 +51,6 @@ trainer:
   reload: False
   checkpoint: '/homes/llumetti/results/canal_generator_train_4E4E6BAC96/checkpoints/best.pth'
   do_train: False
-  do_test: False
-  do_inference: True
+  do_test: True
+  do_inference: False
   epochs: 100

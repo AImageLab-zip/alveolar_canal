@@ -56,5 +56,4 @@ class LossFactory:
                 raise ValueError(f'Loss {lossfn} has some NaN')
             loss = loss * partition_weights
             cur_loss.append(loss.mean())
-            print(f'{lossfn.__class__.__name__}: {loss}')
         return torch.sum(torch.stack(cur_loss))

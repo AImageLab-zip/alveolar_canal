@@ -25,6 +25,7 @@ from torch.utils.data import DistributedSampler
 
 from dataloader.Maxillo import Maxillo
 from dataloader.AugFactory import AugFactory
+from dataloader.DistanceTransform import DistanceTransform
 from losses.LossFactory import LossFactory
 from models.ModelFactory import ModelFactory
 from optimizers.OptimizerFactory import OptimizerFactory
@@ -89,11 +90,20 @@ class Experiment:
             )
         ])
 
+        print(self.config.title)
+        if 'experimental' in self.config.title:
+            self.base_augmentations = tio.Compose([
+                self.base_augmentations,
+                DistanceTransform()
+            ])
+
         self.config.data_loader.augmentations = tio.Compose([
             self.base_augmentations,
             tio.CropOrPad(self.config.data_loader.resize_shape, padding_mode=0),
             self.config.data_loader.augmentations
         ])
+
+        print(self.config.data_loader.augmentations)
 
         self.train_dataset = Maxillo(self.config.data_loader.dataset, 'train', self.config.data_loader.augmentations)
         self.val_dataset = Maxillo(self.config.data_loader.dataset, 'val', self.base_augmentations)

@@ -12,7 +12,9 @@ class DistanceTransform(LabelTransform):
             pos_dist = distance_transform_edt(image)
             neg_dist = distance_transform_edt(neg_image)
             dist = neg_dist - pos_dist
-            # normalize to [0,1]
-            # dist = dist / dist.max()
+            
+            # change range to [-1,1]
+            dist = dist*2/dist.max()-1
+
             image.set_data(dist)
         return subject
