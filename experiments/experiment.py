@@ -91,6 +91,7 @@ class Experiment:
 
         self.config.data_loader.augmentations = tio.Compose([
             self.base_augmentations,
+            tio.CropOrPad(self.data_loader.resize_shape, padding_mode=0),
             self.config.data_loader.augmentations
         ])
 
