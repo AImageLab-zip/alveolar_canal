@@ -17,6 +17,21 @@ detailed before the surgical removal. As avoiding contact
 with the IAN is a primary concern during these operations,
 segmentation plays a key role in surgical preparations.
 
+## Citing our work
+```
+@inproceedings{
+  cipriano2022improving,
+  title={Improving Segmentation of the Inferior Alveolar Nerve through Deep Label Propagation},
+  author={Cipriano, Marco and Allegretti, Stefano and Bolelli, Federico and Pollastri, Federico and Grana, Costantino},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year=2022,
+  month={jun},
+  venue={New Orleans, USA},
+  publisher={IEEE},
+  doi={},
+}
+```
+
 ## IAN Segmentation and Label Propagation
 For the IAN segmentation, we adopted a modified version of U-NET 3D, enriched
 with a 2 pixels padding and an embedding of the coordinates of the sub-volumes
@@ -167,19 +182,3 @@ RandomFlip:
   axes: 2
   flip_probability: 0.7
 ```
-
-## Cite
-```
-@inproceedings{
-  cipriano2022improving,
-  title={Improving Segmentation of the Inferior Alveolar Nerve through Deep Label Propagation},
-  author={Cipriano, Marco and Allegretti, Stefano and Bolelli, Federico and Pollastri, Federico and Grana, Costantino},
-  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
-  year=2022,
-  month={jun},
-  venue={New Orleans, USA},
-  publisher={IEEE},
-  doi={},
-}
-```
-
