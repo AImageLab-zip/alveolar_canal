@@ -1,4 +1,4 @@
-title: canal_generator_train
+title: canal_generator_train-experimental
 project_dir: '/homes/llumetti/results'
 seed: 47
 tensorboard_dir: /homes/llumetti/tensorboard

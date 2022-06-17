@@ -1,22 +1,22 @@
-title: alveolar_canal_finetuning
+title: canal_generator_train-experimental
 project_dir: '/homes/llumetti/results'
 seed: 47
 tensorboard_dir: /homes/llumetti/tensorboard
 
 experiment:
-  name: Segmentation
+  name: Generation
 
 data_loader:
   dataset: /nas/softechict-nas-1/llumetti/maxillo
   training_set: null
   augmentations: configs/augmentations.yaml
   background_suppression: 0
-  batch_size: 6
+  batch_size: 8
   labels:
     BACKGROUND: 0
     INSIDE: 1
   mean: 0.08435
-  num_workers: 4
+  num_workers: 8
   patch_shape:
   - 80
   - 80
@@ -35,7 +35,7 @@ data_loader:
   - 0.999
 
 model:
-  name: PosPadUNet3D
+  name: UNETR
 
 loss:
   name: Jaccard
@@ -44,13 +44,13 @@ lr_scheduler:
   name: Plateau
 
 optimizer:
-  learning_rate: 0.1
-  name: SGD
+  learning_rate: 0.001
+  name: AdamW
 
 trainer:
-  reload: True
-  checkpoint: /homes/llumetti/results/alveolar_canal_pretrain_37BA77A51A/checkpoints/last.pth
+  reload: False
+  checkpoint: '/nas/softechict-nas-2/mcipriano/results/maxillo/3D/6GK1I26CS_CROP/best.pth'
   do_train: True
   do_test: False
   do_inference: False
-  epochs: 100
+  epochs: 150

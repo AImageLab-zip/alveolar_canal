@@ -6,4 +6,4 @@ RandomAffine:
   p: 0.5
 RandomFlip:
   axes: 2
-  flip_probability: 0.7
+  flip_probability: 0.5

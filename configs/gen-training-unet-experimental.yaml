@@ -18,15 +18,15 @@ data_loader:
   mean: 0.08435
   num_workers: 8
   patch_shape:
-  - 120
-  - 120
-  - 120
+  - 128
+  - 128
+  - 128
   resize_shape:
   - 168
   - 280
   - 360
   sampler_type: grid
-  grid_overlap: 0
+  grid_overlap: 64
   std: 0.17885
   volumes_max: 2100
   volumes_min: 0
@@ -40,7 +40,7 @@ model:
 loss:
   name:
   - Jaccard
-  - BoundaryLoss
+  # - BoundaryLoss
 
 lr_scheduler:
   name: Plateau
@@ -51,7 +51,7 @@ optimizer:
 
 trainer:
   reload: False
-  checkpoint: '/nas/softechict-nas-2/mcipriano/results/maxillo/3D/6GK1I26CS_CROP/best.pth'
+  checkpoint: ''
   do_train: True
   do_test: False
   do_inference: False

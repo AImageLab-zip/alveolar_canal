@@ -1,5 +1,5 @@
 import torch
-from torch.optim import Adam, SGD
+from torch.optim import Adam, AdamW, SGD
 
 class OptimizerFactory():
     def __init__(self, name, params, lr):
@@ -11,11 +11,13 @@ class OptimizerFactory():
     def get(self):
         if self.name == 'Adam':
             self.optimizer = Adam(params=self.params, lr=self.lr)
+        elif self.name == 'AdamW':
+            self.optimizer = AdamW(params=self.params, lr=self.lr)
         elif self.name == 'SGD':
             self.optimizer = SGD(params=self.params, lr=self.lr)
         else:
             raise ValueError(f'Unknown optimizer: {self.name}')
-        
+
         self.optimizer.name = self.name
         return self.optimizer
 

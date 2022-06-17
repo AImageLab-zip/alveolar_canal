@@ -1,26 +1,26 @@
-title: alveolar_canal_finetuning
+title: canal_generator_train-experimental_DMFNet
 project_dir: '/homes/llumetti/results'
 seed: 47
 tensorboard_dir: /homes/llumetti/tensorboard
 
 experiment:
-  name: Segmentation
+  name: Generation
 
 data_loader:
   dataset: /nas/softechict-nas-1/llumetti/maxillo
   training_set: null
   augmentations: configs/augmentations.yaml
   background_suppression: 0
-  batch_size: 6
+  batch_size: 2
   labels:
     BACKGROUND: 0
     INSIDE: 1
   mean: 0.08435
-  num_workers: 4
+  num_workers: 8
   patch_shape:
-  - 80
-  - 80
-  - 80
+  - 128
+  - 128
+  - 128
   resize_shape:
   - 168
   - 280
@@ -35,7 +35,7 @@ data_loader:
   - 0.999
 
 model:
-  name: PosPadUNet3D
+  name: DMFNet
 
 loss:
   name: Jaccard
@@ -48,9 +48,9 @@ optimizer:
   name: SGD
 
 trainer:
-  reload: True
-  checkpoint: /homes/llumetti/results/alveolar_canal_pretrain_37BA77A51A/checkpoints/last.pth
+  reload: False
+  checkpoint: ''
   do_train: True
   do_test: False
   do_inference: False
-  epochs: 100
+  epochs: 150

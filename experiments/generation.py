@@ -27,12 +27,25 @@ from eval import Eval as Evaluator
 from experiments.experiment import Experiment
 from dataloader.AugFactory import *
 from dataloader.Maxillo import Maxillo
+from losses.JaccardLoss import JaccardLoss
+from losses.BoundaryLoss import BoundaryLoss
+
+def compute_partition_weights(gt_count):
+    # zero_count = torch.sum(gt_count == 0)
+    # partition_weights = (gt_count) / torch.max(gt_count)
+    # min_weight = torch.min(partition_weights[gt_count != 0])
+    # partition_weights[gt_count == 0] = min_weight / zero_count
+    partition_weights = (1e-10 + gt_count) / (1e-10 + torch.max(gt_count))
+    return partition_weights
+
 
 class Generation(Experiment):
     def __init__(self, config):
         self.train_loader = None
         self.test_loader = None
         self.val_loader = None
+        self.jaccard_loss = JaccardLoss()
+        self.boundary_loss = BoundaryLoss()
         super().__init__(config)
 
     def train(self):
@@ -46,11 +59,14 @@ class Generation(Experiment):
             images = d['data'][tio.DATA].float().cuda()
             sparse = d['sparse'][tio.DATA].float().cuda()
             gt = d['dense'][tio.DATA].cuda()
+            gt_dist = d['dense-dist'][tio.DATA].cuda()
 
             emb_codes = torch.cat((
                 d[tio.LOCATION][:,:3],
                 d[tio.LOCATION][:,:3] + torch.as_tensor(images.shape[-3:])
             ), dim=1).float().cuda()
+
+            print(f'emb_codes: {emb_codes}')
 
             # TODO: also remove split weights from dataloader3D.py?
             # these will be overwritter at line 30, useless
@@ -58,20 +74,41 @@ class Generation(Experiment):
 
             eps = 1e-10
             partition_weights = 1
+            gt_count = 0
             if self.model.__class__.__name__ != 'Competitor':
                 # Skip if all the gt volumes are empty
                 gt_count = torch.sum(gt == 1, dim=list(range(1, gt.ndim)))
                 if torch.sum(gt_count) == 0:
                     continue
-                partition_weights = (eps + gt_count) / torch.max(gt_count)
+                # partition_weights = (eps + gt_count) / torch.max(gt_count)
+                partition_weights = compute_partition_weights(gt_count)
 
             self.optimizer.zero_grad()
-            img_sparse = torch.cat([images, sparse], dim=1)
-            preds = self.model(img_sparse, emb_codes)  # output -> B, C, Z, H, W
+            x = torch.cat([images, sparse], dim=1)
+            preds = self.model(x, emb_codes)  # output -> B, C, Z, H, W
             assert preds.ndim == gt.ndim, f"Gt and output dimensions are not the same before loss. {preds.ndim} vs {gt.ndim}"
+            jloss = self.jaccard_loss(preds, gt)
+            bloss = self.boundary_loss(preds, gt_dist)
 
-            # in original code, partition_weights is hardcoded to 1
-            loss = self.loss(preds, gt, partition_weights)
+            alpha = 0.01*(self.epoch+1)
+            if alpha >= 1:
+                alpha = 0.99
+
+            # print(f'alpha: {alpha}')
+            # print(f'jaccard loss: {jloss}')
+            # print(f'boundary loss: {bloss}')
+
+            loss = (1 - alpha)*jloss + alpha*bloss
+            # loss = jloss
+            print(f'jaccard loss: {loss}')
+            loss *= partition_weights
+            print(f'partition weights: {partition_weights}')
+            print(f'weighted jaccard loss: {loss}')
+            loss = loss.mean()
+            print(f'sum loss: {loss}')
+            print(f'gt_count: {gt_count}')
+            print(f'--------')
+
             losses.append(loss.item())
             loss.backward()
             self.optimizer.step()
@@ -94,65 +131,6 @@ class Generation(Experiment):
 
         return epoch_train_loss, epoch_iou
 
-    def test2(self, phase):
-
-        if phase == 'Test' or phase == 'Final':
-            data_loader = self.test_loader
-        elif phase == 'Validation':
-            data_loader = self.val_loader
-        elif phase == 'Train':
-            data_loader = self.train_loader
-        else:
-            raise Exception(f'this phase is not valid {phase}')
-
-        self.model.eval()
-
-        with torch.no_grad():
-            self.evaluator.reset_eval()
-            losses = []
-            for i, d in tqdm(enumerate(data_loader), total=len(data_loader), desc=f'{phase} epoch {str(self.epoch)}'):
-                images = d['data'][tio.DATA].float().cuda()
-                sparse = d['sparse'][tio.DATA].float().cuda()
-                gt = d['dense'][tio.DATA].cuda()
-
-                emb_codes = torch.cat((
-                    d[tio.LOCATION][:,:3],
-                    d[tio.LOCATION][:,:3] + torch.as_tensor(images.shape[-3:])
-                ), dim=1).float().cuda()
-
-                img_sparse = torch.cat([images, sparse], dim=1)
-                preds = self.model(img_sparse, emb_codes)  # output -> B, C, Z, H, W
-                assert preds.ndim == gt.ndim, f"Gt and output dimensions are not the same before loss. {preds.ndim} vs {gt.ndim}"
-
-                gt_count = torch.sum(gt == 1, dim=list(range(1, gt.ndim)))
-
-                eps = 1e-10
-                partition_weights = 1
-                if self.model.__class__.__name__ != 'Competitor':
-                    # not necessary as batch_size is small, better results
-                    # without that
-                    # if torch.sum(gt_count) == 0: continue
-                    partition_weights = (eps + gt_count) / (eps + torch.max(gt_count))
-
-                loss = self.loss(preds, gt, partition_weights)
-                losses.append(loss.item())
-                preds = (preds > 0.5).squeeze().detach()  # BS, Z, H, W
-
-                gt = gt.squeeze()  # BS, Z, H, W
-                self.evaluator.compute_metrics(preds, gt)
-
-            epoch_loss = sum(losses) / len(losses)
-            epoch_iou, epoch_dice = self.evaluator.mean_metric(phase=phase)
-            self.metrics[phase] = {
-                'iou': epoch_iou,
-                'dice': epoch_dice,
-            }
-            if self.writer is not None:
-                self.writer.add_scalar(f'{phase}/Loss', epoch_loss, self.epoch)
-                self.writer.add_scalar(f'{phase}/Dice', epoch_dice, self.epoch)
-                self.writer.add_scalar(f'{phase}/IoU', epoch_iou, self.epoch)
-        return epoch_iou, epoch_dice
-
     def test(self, phase):
 
         self.model.eval()
@@ -165,14 +143,21 @@ class Generation(Experiment):
             elif phase == 'Validation':
                 dataset = self.val_dataset
 
+            crop_or_pad_transform = tio.CropOrPad(self.config.data_loader.resize_shape, padding_mode=0)
             for i, subject in tqdm(enumerate(dataset), total=len(dataset)):
+                original_shape = subject['data'][tio.DATA].shape
+                original_shape = (original_shape[-3], original_shape[-2], original_shape[-1])
+
+                subject = crop_or_pad_transform(subject)
+
                 sampler = tio.inference.GridSampler(
                         subject,
                         self.config.data_loader.patch_shape,
-                        0
+                        self.config.data_loader.grid_overlap
                 )
                 loader = DataLoader(sampler, batch_size=self.config.data_loader.batch_size)
-                aggregator = tio.inference.GridAggregator(sampler)
+                aggregator = tio.inference.GridAggregator(sampler, overlap_mode='average')
+                # aggregator = tio.inference.GridAggregator(sampler)
                 gt_aggregator = tio.inference.GridAggregator(sampler)
 
                 for j, patch in enumerate(loader):
@@ -180,14 +165,18 @@ class Generation(Experiment):
                     sparse = patch['sparse'][tio.DATA].float().cuda()
                     gt = patch['dense'][tio.DATA].cuda()
                     emb_codes = patch[tio.LOCATION].float().cuda()
-                    # join sparse + data
+
                     x = torch.cat([images, sparse], dim=1)
                     output = self.model(x, emb_codes)  # BS, Classes, Z, H, W
+
                     aggregator.add_batch(output, patch[tio.LOCATION])
                     gt_aggregator.add_batch(gt, patch[tio.LOCATION])
 
                 output = aggregator.get_output_tensor()
                 gt = gt_aggregator.get_output_tensor()
+
+                output = tio.CropOrPad(original_shape, padding_mode=0)(output)
+                gt = tio.CropOrPad(original_shape, padding_mode=0)(gt)
 
                 eps = 1e-6
                 partition_weights = 1
@@ -195,7 +184,8 @@ class Generation(Experiment):
                     # Skip if all the gt volumes are empty
                     gt_count = torch.sum(gt == 1, dim=list(range(1, gt.ndim)))
                     if torch.sum(gt_count) != 0:
-                        partition_weights = (eps + gt_count) / (eps + torch.max(gt_count))
+                        partition_weights = compute_partition_weights(gt_count)
+                        # partition_weights = (eps + gt_count) / (eps + torch.max(gt_count))
                     else:
                         partition_weights = 1
 
@@ -223,8 +213,18 @@ class Generation(Experiment):
         self.model.eval()
 
         with torch.no_grad():
-            dataset = Maxillo(self.config.data_loader.dataset, 'synthetic', self.base_augmentations)
+            dataset = Maxillo(
+                    root=self.config.data_loader.dataset,
+                    splits='test',
+                    transform=self.base_augmentations,
+                    dist_map=['sparse', 'dense']
+            )
+            crop_or_pad_transform = tio.CropOrPad(self.config.data_loader.resize_shape, padding_mode=0)
             for i, subject in tqdm(enumerate(dataset), total=len(dataset)):
+                # original_shape = subject['data'][tio.DATA].shape
+                # original_shape = (original_shape[-3], original_shape[-2], original_shape[-1])
+                # print(f'original_shape: {original_shape}')
+
                 directory = os.path.join(output_path, f'{subject.patient}')
                 os.makedirs(directory, exist_ok=True)
                 file_path = os.path.join(directory, 'generated.npy')
@@ -233,27 +233,30 @@ class Generation(Experiment):
                     logging.info(f'skipping {subject.patient}...')
                     continue
 
+                # subject = crop_or_pad_transform(subject)
                 sampler = tio.inference.GridSampler(
                         subject,
                         self.config.data_loader.patch_shape,
-                        0
+                        # patch_overlap=self.config.data_loader.grid_overlap
+                        patch_overlap=40
                 )
                 loader = DataLoader(sampler, batch_size=self.config.data_loader.batch_size)
-                aggregator = tio.inference.GridAggregator(sampler)
+                aggregator = tio.inference.GridAggregator(sampler, overlap_mode='average')
 
                 logging.info(f'patient {subject.patient}...')
                 for j, patch in enumerate(loader):
                     images = patch['data'][tio.DATA].float().cuda()  # BS, 3, Z, H, W
                     sparse = patch['sparse'][tio.DATA].float().cuda()
                     emb_codes = patch[tio.LOCATION].float().cuda()
-                    # join sparse + data
+
                     x = torch.cat([images, sparse], dim=1)
                     output = self.model(x, emb_codes)  # BS, Classes, Z, H, W
                     aggregator.add_batch(output, patch[tio.LOCATION])
 
                 output = aggregator.get_output_tensor()
+                # output = tio.CropOrPad(original_shape, padding_mode=0)(output)
                 output = output.squeeze(0)
-                output = (output > 0.5).int()
+                # output = (output > 0.5).int()
                 output = output.detach().cpu().numpy()  # BS, Z, H, W
 
                 np.save(file_path, output)

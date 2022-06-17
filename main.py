@@ -114,7 +114,7 @@ if __name__ == "__main__":
 
     # Copy config file to project_dir, to be able to reproduce the experiment
     copy_config_path = os.path.join(project_dir_title, 'config.yaml')
-    shutil.copy(args.config, copy_config_path)
+    # shutil.copy(args.config, copy_config_path)
 
     if not os.path.exists(experiment.config.data_loader.dataset):
         logging.error("Dataset path does not exist: {}".format(experiment.config.data_loader.dataset))
@@ -185,7 +185,7 @@ if __name__ == "__main__":
     # Test the model
     if config.trainer.do_test:
         logging.info('Testing the model...')
-        experiment.load()
+        # experiment.load()
         test_iou, test_dice = experiment.test(phase="Test")
         logging.info(f'Test results IoU: {test_iou}\nDice: {test_dice}')
 

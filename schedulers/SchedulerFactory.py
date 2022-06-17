@@ -19,6 +19,7 @@ class SchedulerFactory():
             self.kwargs = {
                     'mode': self.kwargs.get('mode', None),
                     'patience': self.kwargs.get('patience', None),
+                    'factor': 0.5,
                     'verbose': True,
                     }
             scheduler = ReduceLROnPlateau(self.optimizer, **self.kwargs)
