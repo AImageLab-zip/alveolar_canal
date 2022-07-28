@@ -75,7 +75,7 @@ tasks, the best config file is provided:
 Execute `main.py` with these 3 configs in this order to reproduce our results
 
 ## Checkpoints
-Download the pre-trained checkpoints [here](https://ditto.ing.unimore.it/maxillo/download/checkpoint)
+Download the pre-trained checkpoints [here](https://ditto.ing.unimore.it/maxillo/download/checkpoints)
 
 
 ### experiment.yaml
