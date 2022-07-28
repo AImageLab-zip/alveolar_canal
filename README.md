@@ -18,19 +18,7 @@ with the IAN is a primary concern during these operations,
 segmentation plays a key role in surgical preparations.
 
 ## Citing our work
-```
-@inproceedings{
-  cipriano2022improving,
-  title={Improving Segmentation of the Inferior Alveolar Nerve through Deep Label Propagation},
-  author={Cipriano, Marco and Allegretti, Stefano and Bolelli, Federico and Pollastri, Federico and Grana, Costantino},
-  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
-  year=2022,
-  month={jun},
-  venue={New Orleans, USA},
-  publisher={IEEE},
-  doi={},
-}
-```
+[BibText](https://federicobolelli.it/pub_files/2022cvpr.html)
 
 ## IAN Segmentation and Label Propagation
 For the IAN segmentation, we adopted a modified version of U-NET 3D, enriched
@@ -87,7 +75,7 @@ tasks, the best config file is provided:
 Execute `main.py` with these 3 configs in this order to reproduce our results
 
 ## Checkpoints
-<em>TODO</em>
+Download the pre-trained checkpoints [here](ditto.ing.unimore.it/maxillo/download/checkpoints)
 
 
 ### experiment.yaml
