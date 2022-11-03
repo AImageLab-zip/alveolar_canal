@@ -1,7 +1,6 @@
 title: canal_generator_train
 project_dir: '/homes/llumetti/results'
 seed: 47
-tensorboard_dir: /homes/llumetti/tensorboard
 
 experiment:
   name: Generation

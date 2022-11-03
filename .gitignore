@@ -1,3 +1,5 @@
+wandb/
+
 # General Output
 *.txt
 *.out

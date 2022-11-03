@@ -12,16 +12,16 @@ import random
 import numpy as np
 import torch
 import logging
-from tqdm import tqdm
 import torchio as tio
 import torch.distributed as dist
 import torch.utils.data as data
+import wandb
 
 from torch import nn
-from torch.utils.tensorboard import SummaryWriter
 from os import path
 from torch.backends import cudnn
 from torch.utils.data import DistributedSampler
+from tqdm import tqdm
 
 from dataloader.Maxillo import Maxillo
 from dataloader.AugFactory import AugFactory
@@ -48,6 +48,7 @@ class Experiment:
 
         self.model = ModelFactory(model_name, num_classes, in_ch, emb_shape).get().cuda()
         self.model = nn.DataParallel(self.model)
+        wandb.watch(self.model)
 
         # load optimizer
         optim_name = self.config.optimizer.name
@@ -110,12 +111,6 @@ class Experiment:
 
         if self.config.trainer.reload:
             self.load()
-
-        self.writer = None
-        if self.config.tensorboard_dir is not None and os.path.exists(self.config.tensorboard_dir):
-            self.config.tensorboard_dir = os.path.join(self.config.tensorboard_dir, self.config.title)
-            self.writer = SummaryWriter(log_dir=self.config.tensorboard_dir)
-            logging.info(f'tensorboard_dir @ {self.config.tensorboard_dir}')
 
     def save(self, name):
         if '.pth' not in name:

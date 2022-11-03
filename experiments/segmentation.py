@@ -17,7 +17,6 @@ import torch.distributed as dist
 import torch.utils.data as data
 
 from torch import nn
-from torch.utils.tensorboard import SummaryWriter
 from os import path
 from torch.backends import cudnn
 from torch.utils.data import DistributedSampler
@@ -97,10 +96,11 @@ class Segmentation(Experiment):
             'iou': epoch_iou,
             'dice': epoch_dice,
         }
-        if self.writer is not None:
-            self.writer.add_scalar(f'Train/Loss', epoch_train_loss, self.epoch)
-            self.writer.add_scalar(f'Train/Dice', epoch_dice, self.epoch)
-            self.writer.add_scalar(f'Train/IoU', epoch_iou, self.epoch)
+        wandb.log({
+            f'Train/Loss': epoch_train_loss,
+            f'Train/Dice': epoch_dice,
+            f'Train/IoU': epoch_iou
+        })
 
         return epoch_train_loss, epoch_iou
 
@@ -157,10 +157,11 @@ class Segmentation(Experiment):
             'iou': epoch_iou,
             'dice': epoch_dice,
         }
-        if self.writer is not None and phase != "Final":
-            self.writer.add_scalar(f'{phase}/Loss', epoch_loss, self.epoch)
-            self.writer.add_scalar(f'{phase}/IoU', epoch_iou, self.epoch)
-            self.writer.add_scalar(f'{phase}/Dice', epoch_dice, self.epoch)
+        wandb.log({
+            f'{phase}/Loss': epoch_loss,
+            f'{phase}/Dice': epoch_dice,
+            f'{phase}/IoU': epoch_iou
+        })
 
         # TODO: write also the metrics when Final? Can be written on Test/Metrics
 
@@ -227,9 +228,10 @@ class Segmentation(Experiment):
             epoch_loss = sum(losses) / len(losses)
             epoch_iou, epoch_dice = self.evaluator.mean_metric(phase=phase)
 
-            if self.writer is not None:
-                self.writer.add_scalar(f'{phase}/Loss', epoch_loss, self.epoch)
-                self.writer.add_scalar(f'{phase}/Dice', epoch_dice, self.epoch)
-                self.writer.add_scalar(f'{phase}/IoU', epoch_iou, self.epoch)
+            wandb.log({
+                f'{phase}/Loss': epoch_loss,
+                f'{phase}/Dice': epoch_dice,
+                f'{phase}/IoU': epoch_iou
+            })
 
             return epoch_iou, epoch_dice

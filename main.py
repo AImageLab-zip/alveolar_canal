@@ -15,6 +15,7 @@ import torch
 import torchio as tio
 import torch.distributed as dist
 import torch.utils.data as data
+import wandb
 
 from hashlib import shake_256
 from munch import Munch, munchify
@@ -50,7 +51,7 @@ if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("-c", "--config", default="config.yaml", help="the config file to be used to run the experiment", required=True)
     arg_parser.add_argument("--verbose", action='store_true', help="Log also to stdout")
-    arg_parser.add_argument("--tensorboard", action='store_false', help="avoid using tensorboard, override the config")
+    arg_parser.add_argument("--debug", action='store_true', help="Disable wandb")
     args = arg_parser.parse_args()
 
     # check if the config files exists
@@ -62,16 +63,18 @@ if __name__ == "__main__":
     logging.info(f'Loading the config file...')
     config = yaml.load(open(args.config, "r"), yaml.FullLoader)
     config = munchify(config)
+    wandb.config = config
 
     # Setup to be deterministic
     logging.info(f'setup to be deterministic')
     setup(config.seed)
 
-    # avoid writing on tensorboard when debugging
-    if not args.tensorboard:
-        logging.warning(f'tensorboard disabled by cli args')
-        config.tensorboard_dir = None
-
+    # avoid logging on wandb when debugging
+    if args.debug:
+        logging.warning(f'Debugging enabled')
+        wandb.init(mode='disabled')
+    else:
+        wandb.init(project="alveolar_canal", entity="maxillo")
 
     # Check if project_dir exists
     if not os.path.exists(config.project_dir):

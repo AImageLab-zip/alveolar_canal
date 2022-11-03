@@ -89,7 +89,6 @@ title: canal_generator_train
 # logs and a copy of the config used
 project_dir: '/path/to/results'
 seed: 47
-tensorboard_dir: /path/to/tensorboard
 
 # which experiment to execute: Segmentation or Generation
 experiment:

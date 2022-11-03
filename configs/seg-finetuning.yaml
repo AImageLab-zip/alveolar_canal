@@ -1,7 +1,6 @@
 title: alveolar_canal_finetuning
 project_dir: '/homes/llumetti/results'
 seed: 47
-tensorboard_dir: /homes/llumetti/tensorboard
 
 experiment:
   name: Segmentation

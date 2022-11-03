@@ -1,0 +1,27 @@
+{
+    "os": "Linux-5.4.0-107-generic-x86_64-with-glibc2.10",
+    "python": "3.8.5",
+    "heartbeatAt": "2022-11-03T10:33:48.320058",
+    "startedAt": "2022-11-03T10:33:47.173954",
+    "docker": null,
+    "gpu": "Tesla K80",
+    "gpu_count": 2,
+    "cpu_count": 32,
+    "cuda": "10.2.89",
+    "args": [
+        "--config",
+        "configs/gen-training-unet.yaml"
+    ],
+    "state": "running",
+    "program": "main.py",
+    "codePath": "main.py",
+    "git": {
+        "remote": "git@github.com:AImageLab-zip/alveolar_canal.git",
+        "commit": "594521db2af19ef9736b0142ef372a8c77a9f58d"
+    },
+    "email": "lumetti.luca@gmail.com",
+    "root": "/homes/llumetti/alveolar_canal",
+    "host": "aimagelab-srv-00",
+    "username": "llumetti",
+    "executable": "/usr/local/anaconda3/bin/python"
+}
