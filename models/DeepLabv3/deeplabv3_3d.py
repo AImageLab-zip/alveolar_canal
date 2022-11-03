@@ -8,7 +8,7 @@ from .resnet import ResNet18_OS16, ResNet34_OS16, ResNet50_OS16, ResNet101_OS16,
 from .aspp import ASPP, ASPP_Bottleneck
 
 class DeepLabV3_3D(nn.Module):
-    def __init__(self, num_classes, emb_shape, input_channels, resnet, last_activation = None):
+    def __init__(self, num_classes, emb_shape, input_channels, resnet, last_activation = 'sigmoid'):
         super(DeepLabV3_3D, self).__init__()
         self.num_classes = num_classes
         self.last_activation = last_activation

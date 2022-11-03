@@ -15,6 +15,7 @@ from tqdm import tqdm
 import torchio as tio
 import torch.distributed as dist
 import torch.utils.data as data
+import wandb
 
 from torch import nn
 from os import path
@@ -76,16 +77,7 @@ class Segmentation(Experiment):
             loss.backward()
             self.optimizer.step()
 
-            # final predictions
-            # shape B, C, xyz -> softmax -> B, xyz
-            # shape 1, C, xyz -> softmax -> 1, xyz
-            # shape B, 1, xyz -> sigmoid + sqz -> B, xyz
-            # shape B, 1, xyz -> sigmoid + sqz -> xyz
-            if preds.shape[1] > 1:
-                preds = torch.argmax(torch.nn.Softmax(dim=1)(preds), dim=1)
-            else:
-                preds = (preds > 0).int()
-                preds = preds.squeeze().detach()  # BS, Z, H, W
+            preds = (preds > 0.5).squeeze().detach()
 
             gt = gt.squeeze()  # BS, Z, H, W
             self.evaluator.compute_metrics(preds, gt)
@@ -141,12 +133,7 @@ class Segmentation(Experiment):
                 loss = self.loss(output, gt, partition_weights)
                 losses.append(loss.item())
 
-                if output.ndim > 3 and False:
-                    assert False, 'This part looks wrong, dim=0 or dim=1?'
-                    output = torch.argmax(torch.nn.Softmax(dim=0)(output), dim=0).numpy()
-                else:
-                    output = (output > 0).int()
-                    output = output.squeeze().detach()
+                output = (output > 0.5).squeeze().detach()
 
                 gt = gt.squeeze()
                 self.evaluator.compute_metrics(output, gt)
@@ -221,7 +208,7 @@ class Segmentation(Experiment):
                 losses.append(loss.item())
 
                 output = output.squeeze(0)
-                output = (output > 0).int()
+                output = (output > 0.5)
 
                 self.evaluator.compute_metrics(output, gt)
 

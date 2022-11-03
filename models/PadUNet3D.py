@@ -13,14 +13,12 @@ def initialize_weights(*models):
                 module.weight.data.fill_(1)
                 module.bias.data.zero_()
 
-class PosPadUNet3D(nn.Module):
-    def __init__(self, n_classes, emb_shape, in_ch, size=32):
+class PadUNet3D(nn.Module):
+    def __init__(self, n_classes, emb_shape, in_ch, size=64):
         self.n_classes = n_classes
         self.in_ch = in_ch
-        super(PosPadUNet3D, self).__init__()
+        super(PadUNet3D, self).__init__()
 
-        self.emb_shape = torch.as_tensor(emb_shape)
-        self.pos_emb_layer = nn.Linear(6, torch.prod(self.emb_shape).item())
         self.ec0 = self.conv3Dblock(self.in_ch, size, groups=1)
         self.ec1 = self.conv3Dblock(size, size*2, kernel_size=3, padding=1, groups=1)  # third dimension to even val
         self.ec2 = self.conv3Dblock(size*2, size*2, groups=1)
@@ -34,7 +32,7 @@ class PosPadUNet3D(nn.Module):
         self.pool1 = nn.MaxPool3d(2)
         self.pool2 = nn.MaxPool3d(2)
 
-        self.dc9 = nn.ConvTranspose3d(size*16+1, size*16, kernel_size=2, stride=2)
+        self.dc9 = nn.ConvTranspose3d(size*16, size*16, kernel_size=2, stride=2)
         self.dc8 = self.conv3Dblock(size*8 + size*16, size*8, kernel_size=3, stride=1, padding=1)
         self.dc7 = self.conv3Dblock(size*8, size*8, kernel_size=3, stride=1, padding=1)
         self.dc6 = nn.ConvTranspose3d(size*8, size*8, kernel_size=2, stride=2)
@@ -70,8 +68,6 @@ class PosPadUNet3D(nn.Module):
         h = self.ec6(h)
         h = self.ec7(h)
 
-        emb_pos = self.pos_emb_layer(emb_codes).view(-1, 1, *self.emb_shape)
-        h = torch.cat((h, emb_pos), dim=1)
         h = torch.cat((self.dc9(h), feat_2), dim=1)
 
         h = self.dc8(h)

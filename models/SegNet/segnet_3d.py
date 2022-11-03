@@ -152,7 +152,7 @@ class SegNet3D(nn.Module):
         x = F.relu(self.BNDe12(self.ConvDe12(x)))
         x = self.ConvDe11(x)
 
-        return x
+        return torch.sigmoid(x)
 
 if __name__ == "__main__":
     model = SegNet3D(1, (8,8,8), 1)

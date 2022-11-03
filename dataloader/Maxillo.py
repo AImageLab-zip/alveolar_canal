@@ -15,14 +15,15 @@ class Maxillo(tio.SubjectsDataset):
     TODO: Add more information about the dataset
     """
 
-    def __init__(self, root, splits, transform=None, **kwargs):
+    def __init__(self, root, filename, splits, transform=None, dist_map=None, **kwargs):
+        if type(dist_map) == str:
+            dist_map = [dist_map]
+
         root = Path(root)
         if not isinstance(splits, list):
             splits = [splits]
-#        if 'test' in splits:
-#            transform = tio.CropOrPad((168, 280, 360), padding_mode=0)
 
-        subjects_list = self._get_subjects_list(root, splits)
+        subjects_list = self._get_subjects_list(root, filename, splits, dist_map)
         super().__init__(subjects_list, transform, **kwargs)
 
     def _numpy_reader(self, path):
@@ -30,10 +31,10 @@ class Maxillo(tio.SubjectsDataset):
         affine = torch.eye(4, requires_grad=False)
         return data, affine
 
-    def _get_subjects_list(self, root, splits):
+    def _get_subjects_list(self, root, filename, splits, dist_map):
         dense_dir = root / 'DENSE'
         sparse_dir = root / 'SPARSE'
-        splits_path = root / 'splits.json'
+        splits_path = root / filename
 
         with open(splits_path) as splits_file:
             json_splits = json.load(splits_file)
@@ -48,9 +49,9 @@ class Maxillo(tio.SubjectsDataset):
                 # TODO: add naive volume
                 if split == 'synthetic':
                     dense_path = sparse_dir / patient / 'generated.npy'
-                    logging.warn(f'No dense file for the synthetic patient {patient}! Are you generating it?')
-                    logging.warn(f'Random data will be loaded, no worries if you are doing the deep expansion!')
-                    if not dense_path.is_file() and split == 'synthetic':
+                    if not dense_path.is_file():
+                        logging.warn(f'No dense file for the synthetic patient {patient}! Are you generating it?')
+                        logging.warn(f'Random data will be loaded, no worries if you are doing the deep expansion!')
                         dense_path = sparse_dir / patient / 'data.npy'
 
                 if not data_path.is_file():
@@ -68,15 +69,26 @@ class Maxillo(tio.SubjectsDataset):
                         'dense': tio.LabelMap(dense_path, reader=self._numpy_reader),
                         }
 
+                if 'dense' in dist_map:
+                    subject_dict['dense-dist'] = tio.LabelMap(dense_path, reader=self._numpy_reader)
+
+                if 'sparse' in dist_map:
+                    subject_dict['sparse-dist'] = tio.LabelMap(sparse_path, reader=self._numpy_reader)
+
                 subjects.append(tio.Subject(**subject_dict))
+            print(f"Loaded {len(subjects)} patients for split {split}")
         return subjects
 
     def get_loader(self, config, aggr=None):
-        samples_per_volume = int(np.prod([np.round(i / j) for i, j in zip(config.resize_shape, config.patch_shape)]))
-        sampler = tio.GridSampler(patch_size=config.patch_shape, patch_overlap=0)
+        samples_per_volume = [np.round(i / (j-config.grid_overlap)) for i, j in zip(config.resize_shape,
+config.patch_shape)]
+        samples_per_volume = int(np.prod(samples_per_volume))
+        sampler = tio.GridSampler(patch_size=config.patch_shape, patch_overlap=config.grid_overlap)
+        # sampler = tio.UniformSampler(patch_size=config.patch_shape)
+        # print(f'sampler_per_volume: {samples_per_volume}')
         queue = tio.Queue(
                 subjects_dataset=self,
-                max_length=samples_per_volume,
+                max_length=samples_per_volume*2,
                 samples_per_volume=samples_per_volume,
                 sampler=sampler,
                 num_workers=config.num_workers,
@@ -85,7 +97,7 @@ class Maxillo(tio.SubjectsDataset):
                 start_background=False,
         )
         loader = DataLoader(queue, batch_size=config.batch_size, num_workers=0, pin_memory=True)
-        logging.info(f'samples_per_volume: {samples_per_volume}')
+        # logging.info(f'samples_per_volume: {samples_per_volume}')
         return loader
 
     def get_aggregator(self, config, aggr=None):

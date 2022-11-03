@@ -15,6 +15,7 @@ from tqdm import tqdm
 import torchio as tio
 import torch.distributed as dist
 import torch.utils.data as data
+import wandb
 
 from torch import nn
 from os import path
@@ -182,7 +183,7 @@ class Generation(Experiment):
             elif phase == 'Validation':
                 dataset = self.val_dataset
 
-            for i, subject in tqdm(enumerate(dataset), total=len(dataset)):
+            for i, subject in tqdm(enumerate(dataset), total=len(dataset), desc=f'{phase} epoch {str(self.epoch)}'):
                 sampler = tio.inference.GridSampler(
                         subject,
                         self.config.data_loader.patch_shape,
@@ -241,7 +242,13 @@ class Generation(Experiment):
         self.model.eval()
 
         with torch.no_grad():
-            dataset = Maxillo(self.config.data_loader.dataset, 'synthetic', self.base_augmentations)
+            dataset = Maxillo(
+                    self.config.data_loader.dataset,
+                    splits='test',
+                    transform=self.config.data_loader.preprocessing,
+                    dist_map=['sparse', 'dense']
+            )
+            crop_or_pad_transform = tio.CropOrPad(self.config.data_loader.resize_shape, padding_mode=0)
             for i, subject in tqdm(enumerate(dataset), total=len(dataset)):
                 directory = os.path.join(output_path, f'{subject.patient}')
                 os.makedirs(directory, exist_ok=True)
@@ -254,24 +261,26 @@ class Generation(Experiment):
                 sampler = tio.inference.GridSampler(
                         subject,
                         self.config.data_loader.patch_shape,
-                        0
+                        patch_overlap=self.config.data_loader.grid_overlap,
                 )
                 loader = DataLoader(sampler, batch_size=self.config.data_loader.batch_size)
-                aggregator = tio.inference.GridAggregator(sampler)
+                aggregator = tio.inference.GridAggregator(sampler, overlap_mode='average')
 
                 logging.info(f'patient {subject.patient}...')
                 for j, patch in enumerate(loader):
                     images = patch['data'][tio.DATA].float().cuda()  # BS, 3, Z, H, W
                     sparse = patch['sparse'][tio.DATA].float().cuda()
                     emb_codes = patch[tio.LOCATION].float().cuda()
+
                     # join sparse + data
-                    x = torch.cat([images, sparse], dim=1)
-                    output = self.model(x, emb_codes)  # BS, Classes, Z, H, W
+                    images = torch.cat([images, sparse], dim=1)
+                    output = self.model(images, emb_codes)  # BS, Classes, Z, H, W
                     aggregator.add_batch(output, patch[tio.LOCATION])
 
                 output = aggregator.get_output_tensor()
+                # output = tio.CropOrPad(original_shape, padding_mode=0)(output)
                 output = output.squeeze(0)
-                output = (output > 0).int()
+                # output = (output > 0.5).int()
                 output = output.detach().cpu().numpy()  # BS, Z, H, W
 
                 np.save(file_path, output)

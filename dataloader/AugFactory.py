@@ -1,5 +1,8 @@
 import logging
 import importlib
+
+import random
+
 import numpy as np
 import torch
 import torchvision.transforms.functional as TF
@@ -9,6 +12,8 @@ from scipy.ndimage import rotate, map_coordinates, gaussian_filter
 from torchvision import transforms
 from torch.nn.functional import interpolate
 from torch.nn.functional import pad
+from dataloader.DistanceTransform import DistanceTransform
+from dataloader.DistanceTransform import ProximityTransform
 
 class ToPilImage:
 
@@ -400,12 +405,33 @@ class CropAndPad(tio.Transform):
             img.unsqueeze(0)
         return img
 
+class HalfSplit(tio.Transform):
+    def __init__(self, axes=-1):
+        super().__init__()
+        self.axes = axes
+
+    def apply_transform(self, image):
+        rnd = random.random()
+        if rnd > 0.5:
+            print(f'HalfSplit: {rnd}')
+            self._crop = tio.Crop((0,0,0,0,0,180))
+            self._flip = lambda x: x
+        else:
+            print(f'HalfSplit: {rnd}')
+            self._crop = tio.Crop((0,0,0,0,180,0))
+            self._flip = tio.RandomFlip(axes = 2, flip_probability=1)
+
+        image = self._crop(image)
+        image = self._flip(image)
+        return image
+
+
 # TODO: change this pls
 class AugFactory:
     def __init__(self, aug_list):
         self.aug_list = aug_list
         self.transforms = self.factory(self.aug_list, [])
-        logging.info('going to use the following augmentations:: %s', self.aug_list)
+        logging.info('Augmentations: {}'.format(self.aug_list))
 
     def factory(self, auglist, transforms):
         for aug in auglist:
@@ -416,7 +442,14 @@ class AugFactory:
                     kwargs = {}
                     for param, value in auglist[aug].items():
                         kwargs[param] = value
-                    t = getattr(tio, aug)(**kwargs)
+                    if aug == 'DistanceTransform':
+                        t = DistanceTransform(**kwargs)
+                    elif aug == 'ProximityTransform':
+                        t = ProximityTransform(**kwargs)
+                    elif aug == 'HalfSplit':
+                        t = HalfSplit()
+                    else:
+                        t = getattr(tio, aug)(**kwargs)
                     transforms.append(t)
                 except:
                     raise Exception(f"this transform is not valid: {aug}")
@@ -427,8 +460,5 @@ class AugFactory:
         return the transform object
         :return:
         """
-        transf = tio.Compose([
-            tio.CropOrPad((168, 280, 360), padding_mode=0),
-            tio.Compose(self.transforms)
-            ])
+        transf = tio.Compose(self.transforms)
         return transf

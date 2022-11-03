@@ -1,0 +1,5 @@
+Clamp:
+  out_min: 0
+  out_max: 2100
+RescaleIntensity:
+  out_min_max: !!python/tuple [0,1]

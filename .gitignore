@@ -1,4 +1,6 @@
 wandb/
+slurm-*.out
+*.pt
 
 # General Output
 *.txt

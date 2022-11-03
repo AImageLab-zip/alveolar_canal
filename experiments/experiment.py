@@ -37,8 +37,10 @@ class Experiment:
         self.epoch = 0
         self.metrics = {}
 
+        filename = 'splits.json.small'
+
         num_classes = len(self.config.data_loader.labels)
-        if 'Jaccard' in self.config.loss.name:
+        if 'Jaccard' in self.config.loss.name or num_classes == 2:
             num_classes = 1
 
         # load model
@@ -69,7 +71,7 @@ class Experiment:
                 gamma=sched_gamma,
                 mode='max',
                 verbose=True,
-                patience=7
+                patience=15
             ).get()
 
         # load loss
@@ -78,27 +80,37 @@ class Experiment:
         # load evaluator
         self.evaluator = Evaluator(self.config, skip_dump=True)
 
-        # TODO: load everything in a single line?
-        # load datasets
-        self.base_augmentations = tio.Compose([
-            tio.Clamp(
-                out_min=self.config.data_loader.volumes_min,
-                out_max=self.config.data_loader.volumes_max
-                ),
-            tio.RescaleIntensity(
-                out_min_max=(0,1)
-            )
-        ])
-
-        self.config.data_loader.augmentations = tio.Compose([
-            self.base_augmentations,
-            self.config.data_loader.augmentations
-        ])
-
-        self.train_dataset = Maxillo(self.config.data_loader.dataset, 'train', self.config.data_loader.augmentations)
-        self.val_dataset = Maxillo(self.config.data_loader.dataset, 'val', self.base_augmentations)
-        self.test_dataset = Maxillo(self.config.data_loader.dataset, 'test', self.base_augmentations)
-        self.synthetic_dataset = Maxillo(self.config.data_loader.dataset, 'synthetic', self.config.data_loader.augmentations)
+        self.train_dataset = Maxillo(
+                root=self.config.data_loader.dataset,
+                filename=filename,
+                splits='train',
+                transform=tio.Compose([
+                    self.config.data_loader.preprocessing,
+                    self.config.data_loader.augmentations,
+                    ]),
+                dist_map=['sparse','dense']
+        )
+        self.val_dataset = Maxillo(
+                root=self.config.data_loader.dataset,
+                filename=filename,
+                splits='val',
+                transform=self.config.data_loader.preprocessing,
+                dist_map=['sparse', 'dense']
+        )
+        self.test_dataset = Maxillo(
+                root=self.config.data_loader.dataset,
+                filename=filename,
+                splits='test',
+                transform=self.config.data_loader.preprocessing,
+                dist_map=['sparse', 'dense']
+        )
+        self.synthetic_dataset = Maxillo(
+                root=self.config.data_loader.dataset,
+                filename=filename,
+                splits='synthetic',
+                transform=self.config.data_loader.preprocessing,
+                dist_map=['sparse', 'dense'],
+        ) 
 
         # self.test_aggregator = self.train_dataset.get_aggregator(self.config.data_loader)
         # self.synthetic_aggregator = self.synthetic_dataset.get_aggregator(self.config.data_loader)
@@ -135,20 +147,9 @@ class Experiment:
             # check that the title headers (without the hash) is the same
             self_title_header = self.config.title[:-11]
             load_title_header = state['title'][:-11]
-            if 'pretrain' not in state['title'] or 'finetuning' not in self.config.title:
+            if self_title_header == load_title_header:
                 self.config.title = state['title']
-                # brand new optimizer if we are doing finetuning, to avoid a too low learning rate
-                self.optimizer.load_state_dict(state['optimizer'])
-            # TODO: fix the following, as i've changed the hash function
-            # if self_title_header == load_title_header:
-            #    self.config.title = state['title']
-            # elif self_title_header != 'alveolar_canal_finetuning' or load_title_header != 'alveolar_canal_pretrain':
-            #    logging.warn(f'Different titles while loading and not pretrain->finetuning')
-            #    logging.warn(f'self_title_header: {self_title_header}')
-            #    logging.warn(f'self_title: {self.config.title}')
-            #    logging.warn(f'load_title_header: {load_title_header}')
-            #    logging.warn(f'load_title: {state["title"]}')
-
+        self.optimizer.load_state_dict(state['optimizer'])
         self.model.load_state_dict(state['state_dict'])
         self.epoch = state['epoch'] + 1
 

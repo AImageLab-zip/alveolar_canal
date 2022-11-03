@@ -82,7 +82,17 @@ if __name__ == "__main__":
         raise SystemExit
 
     # check if augmentations is set and file exists
-    logging.info(f'loading augmentations')
+    logging.info(f'loading preprocessing and augmentations functions')
+    if config.data_loader.preprocessing is None:
+        preproc = []
+    elif not os.path.exists(config.data_loader.preprocessing):
+        logging.error('Preprocessing file does not exist: {}'.format(config.data_loader.preprocessing))
+        preproc = []
+    else:
+        with open(config.data_loader.preprocessing, 'r') as preproc_file:
+            preproc = yaml.load(preproc_file, yaml.FullLoader)
+    config.data_loader.preprocessing = AugFactory(preproc).get_transform()
+
     if config.data_loader.augmentations is None:
         aug = []
     elif not os.path.exists(config.data_loader.augmentations):
