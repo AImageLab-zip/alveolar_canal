@@ -89,6 +89,7 @@ class Segmentation(Experiment):
             'dice': epoch_dice,
         }
         wandb.log({
+            f'Epoch': self.epoch,
             f'Train/Loss': epoch_train_loss,
             f'Train/Dice': epoch_dice,
             f'Train/IoU': epoch_iou
@@ -97,74 +98,7 @@ class Segmentation(Experiment):
         return epoch_train_loss, epoch_iou
 
     def test(self, phase):
-
-        if phase == 'Test' or phase == 'Final':
-            data_loader = self.test_loader
-        elif phase == 'Validation':
-            data_loader = self.val_loader
-        elif phase == 'Train':
-            data_loader = self.train_loader
-        else:
-            raise Exception(f'this phase is not valid {phase}')
-
         self.model.eval()
-
-        with torch.no_grad():
-            self.evaluator.reset_eval()
-            losses = []
-            for i, d in tqdm(enumerate(data_loader), total=len(data_loader), desc=f'{phase} epoch {str(self.epoch)}'):
-                images = d['data'][tio.DATA].float().cuda()  # BS, 3, Z, H, W
-                gt = d['dense'][tio.DATA].float().cuda()
-                emb_codes = torch.cat((
-                    d[tio.LOCATION][:,:3],
-                    d[tio.LOCATION][:,:3] + torch.as_tensor(images.shape[-3:])
-                ), dim=1).float().cuda()
-
-                gt_count = torch.sum(gt == 1, dim=list(range(1, gt.ndim)))
-
-                eps = 1e-10
-                partition_weights = 1
-                if self.model.__class__.__name__ != 'Competitor':
-                    if torch.sum(gt_count) == 0: continue
-                    partition_weights = (eps + gt_count) / torch.max(gt_count)
-
-                output = self.model(images, emb_codes)  # BS, Classes, Z, H, W
-
-                loss = self.loss(output, gt, partition_weights)
-                losses.append(loss.item())
-
-                output = (output > 0.5).squeeze().detach()
-
-                gt = gt.squeeze()
-                self.evaluator.compute_metrics(output, gt)
-
-        epoch_loss = sum(losses) / len(losses)
-        epoch_iou, epoch_dice = self.evaluator.mean_metric(phase=phase)
-        self.metrics[phase] = {
-            'iou': epoch_iou,
-            'dice': epoch_dice,
-        }
-        wandb.log({
-            f'{phase}/Loss': epoch_loss,
-            f'{phase}/Dice': epoch_dice,
-            f'{phase}/IoU': epoch_iou
-        })
-
-        # TODO: write also the metrics when Final? Can be written on Test/Metrics
-
-        if phase in ['Test', 'Final']:
-            logging.info(
-                f'{phase} Epoch [{self.epoch}], '
-                f'{phase} Mean Metric (IoU): {epoch_iou}'
-                f'{phase} Mean Metric (Dice): {epoch_dice}'
-            )
-
-        return epoch_iou, epoch_dice
-
-    def test(self, phase):
-
-        self.model.eval()
-
         with torch.no_grad():
             self.evaluator.reset_eval()
             losses = []
@@ -173,7 +107,7 @@ class Segmentation(Experiment):
             elif phase == 'Validation':
                 dataset = self.val_dataset
 
-            for i, subject in tqdm(enumerate(dataset), total=len(dataset)):
+            for i, subject in tqdm(enumerate(dataset), total=len(dataset), desc=f'{phase} epoch {str(self.epoch)}'):
 
                 sampler = tio.inference.GridSampler(
                         subject,
@@ -216,6 +150,7 @@ class Segmentation(Experiment):
             epoch_iou, epoch_dice = self.evaluator.mean_metric(phase=phase)
 
             wandb.log({
+                f'Epoch': self.epoch,
                 f'{phase}/Loss': epoch_loss,
                 f'{phase}/Dice': epoch_dice,
                 f'{phase}/IoU': epoch_iou

@@ -8,6 +8,7 @@ experiment:
 data_loader:
   dataset: /nas/softechict-nas-1/llumetti/maxillo
   training_set: null
+  preprocessing: configs/preprocessing.yaml
   augmentations: configs/augmentations.yaml
   background_suppression: 0
   batch_size: 6

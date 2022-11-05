@@ -15,7 +15,6 @@ import torch
 import torchio as tio
 import torch.distributed as dist
 import torch.utils.data as data
-import wandb
 
 from hashlib import shake_256
 from munch import Munch, munchify
@@ -23,11 +22,12 @@ from torch import nn
 from os import path
 from torch.backends import cudnn
 from torch.utils.data import DistributedSampler
+import wandb
 
 from experiments.ExperimentFactory import ExperimentFactory
 from dataloader.AugFactory import AugFactory
 
-# used to generate random names that will be append to the
+# used to generate random names that will be appended to the
 # experiment name
 def timehash():
     t = time.time()
@@ -44,6 +44,7 @@ def setup(seed):
     torch.backends.cudnn.deterministic = True
 
 if __name__ == "__main__":
+
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
@@ -51,7 +52,7 @@ if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("-c", "--config", default="config.yaml", help="the config file to be used to run the experiment", required=True)
     arg_parser.add_argument("--verbose", action='store_true', help="Log also to stdout")
-    arg_parser.add_argument("--debug", action='store_true', help="Disable wandb")
+    arg_parser.add_argument("--debug", action='store_true', help="debug, no wandb")
     args = arg_parser.parse_args()
 
     # check if the config files exists
@@ -63,36 +64,37 @@ if __name__ == "__main__":
     logging.info(f'Loading the config file...')
     config = yaml.load(open(args.config, "r"), yaml.FullLoader)
     config = munchify(config)
-    wandb.config = config
 
     # Setup to be deterministic
     logging.info(f'setup to be deterministic')
     setup(config.seed)
 
-    # avoid logging on wandb when debugging
     if args.debug:
-        logging.warning(f'Debugging enabled')
-        wandb.init(mode='disabled')
-    else:
-        wandb.init(project="alveolar_canal", entity="maxillo")
+        os.environ['WANDB_DISABLED'] = 'true'
+
+    # start wandb
+    wandb.init(project="alveolar_canal", entity="maxillo")
+    wandb.config = config
 
     # Check if project_dir exists
     if not os.path.exists(config.project_dir):
         logging.error("Project_dir does not exist: {}".format(config.project_dir))
         raise SystemExit
 
-    # check if augmentations is set and file exists
-    logging.info(f'loading preprocessing and augmentations functions')
+    # check if preprocessing is set and file exists
+    logging.info(f'loading preprocessing')
     if config.data_loader.preprocessing is None:
         preproc = []
     elif not os.path.exists(config.data_loader.preprocessing):
-        logging.error('Preprocessing file does not exist: {}'.format(config.data_loader.preprocessing))
+        logging.error("Preprocessing file does not exist: {}".format(config.data_loader.preprocessing))
         preproc = []
     else:
         with open(config.data_loader.preprocessing, 'r') as preproc_file:
             preproc = yaml.load(preproc_file, yaml.FullLoader)
     config.data_loader.preprocessing = AugFactory(preproc).get_transform()
 
+    # check if augmentations is set and file exists
+    logging.info(f'loading augmentations')
     if config.data_loader.augmentations is None:
         aug = []
     elif not os.path.exists(config.data_loader.augmentations):

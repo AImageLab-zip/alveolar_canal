@@ -1,44 +1,39 @@
-title: alveolar_canal_pretrain
+title: canal_generator__half
 project_dir: '/homes/llumetti/results'
 seed: 47
 
 experiment:
-  name: Segmentation
+  name: Generation
 
 data_loader:
-  dataset: /nas/softechict-nas-1/llumetti/maxillo
-  training_set: generated # null, generated
+  dataset: /nas/softechict-nas-1/llumetti/maxillo_resize
+  training_set: null
   preprocessing: configs/preprocessing.yaml
   augmentations: configs/augmentations.yaml
   background_suppression: 0
-  batch_size: 6
+  batch_size: 4
   labels:
     BACKGROUND: 0
     INSIDE: 1
-  mean: 0.08435
   num_workers: 4
   patch_shape:
-  - 80
-  - 80
-  - 80
+  - 56
+  - 96
+  - 64
   resize_shape:
-  - 168
-  - 280
-  - 360
+  - 56
+  - 96
+  - 64
   sampler_type: grid
   grid_overlap: 0
-  std: 0.17885
-  volumes_max: 2100
-  volumes_min: 0
-  weights:
-  - 0.000703
-  - 0.999
+  overlap_mode: 'crop'
 
 model:
-  name: PosPadUNet3D
+  name: PadUNet3D
 
 loss:
-  name: Jaccard
+  name:
+  - Jaccard
 
 lr_scheduler:
   name: Plateau
@@ -49,8 +44,8 @@ optimizer:
 
 trainer:
   reload: False
-  checkpoint: null
+  checkpoint: ''
   do_train: True
   do_test: False
   do_inference: False
-  epochs: 28
+  epochs: 100

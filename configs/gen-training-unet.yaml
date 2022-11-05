@@ -1,6 +1,7 @@
 title: canal_generator_train
 project_dir: '/homes/llumetti/results'
 seed: 47
+tensorboard_dir: /homes/llumetti/tensorboard
 
 experiment:
   name: Generation
@@ -9,7 +10,6 @@ data_loader:
   dataset: /nas/softechict-nas-1/llumetti/maxillo
   training_set: null
   augmentations: configs/augmentations.yaml
-  preprocessing: configs/preprocessing.yaml
   background_suppression: 0
   batch_size: 2
   labels:

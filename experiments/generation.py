@@ -85,7 +85,7 @@ class Generation(Experiment):
                 # TODO: Can be optimized? Is Softmax here useless?
                 preds = torch.argmax(torch.nn.Softmax(dim=1)(preds), dim=1)
             else:
-                preds = (preds > 0).int()
+                preds = (preds > 0.5).int()
                 preds = preds.squeeze().detach()  # BS, Z, H, W
 
             gt = gt.squeeze()  # BS, Z, H, W
@@ -99,6 +99,7 @@ class Generation(Experiment):
         }
 
         wandb.log({
+            f'Epoch': self.epoch,
             f'Train/Loss': epoch_train_loss,
             f'Train/Dice': epoch_dice,
             f'Train/IoU': epoch_iou
@@ -152,7 +153,7 @@ class Generation(Experiment):
                     # TODO: Can be optimized? Is Softmax here useless?
                     preds = torch.argmax(torch.nn.Softmax(dim=1)(preds), dim=1)
                 else:
-                    preds = (preds > 0).int()
+                    preds = (preds > 0.5).int()
                     preds = preds.squeeze().detach()  # BS, Z, H, W
 
                 gt = gt.squeeze()  # BS, Z, H, W
@@ -165,6 +166,7 @@ class Generation(Experiment):
                 'dice': epoch_dice,
             }
             wandb.log({
+                f'Epoch': self.epoch,
                 f'{phase}/Loss': epoch_loss,
                 f'{phase}/Dice': epoch_dice,
                 f'{phase}/IoU': epoch_iou
@@ -221,7 +223,7 @@ class Generation(Experiment):
                 losses.append(loss.item())
 
                 output = output.squeeze(0)
-                output = (output > 0).int()
+                output = (output > 0.5).int()
 
                 self.evaluator.compute_metrics(output, gt)
 
@@ -229,6 +231,7 @@ class Generation(Experiment):
             epoch_iou, epoch_dice = self.evaluator.mean_metric(phase=phase)
 
             wandb.log({
+                f'Epoch': self.epoch,
                 f'{phase}/Loss': epoch_loss,
                 f'{phase}/Dice': epoch_dice,
                 f'{phase}/IoU': epoch_iou
