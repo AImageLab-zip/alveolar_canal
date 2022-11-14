@@ -85,6 +85,7 @@ class Experiment:
                 filename=filename,
                 splits='train',
                 transform=tio.Compose([
+                    tio.CropOrPad(self.config.data_loader.resize_shape, padding_mode=0),
                     self.config.data_loader.preprocessing,
                     self.config.data_loader.augmentations,
                     ]),

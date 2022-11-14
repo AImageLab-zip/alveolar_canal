@@ -4,3 +4,5 @@ RandomAffine:
   isotropic: false
   image_interpolation: linear
   p: 0.5
+HalfSplit:
+  axes: -1

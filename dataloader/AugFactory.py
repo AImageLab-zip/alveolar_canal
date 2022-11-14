@@ -405,25 +405,44 @@ class CropAndPad(tio.Transform):
             img.unsqueeze(0)
         return img
 
-class HalfSplit(tio.Transform):
+class LeftSplit(tio.Transform):
     def __init__(self, axes=-1):
         super().__init__()
         self.axes = axes
 
     def apply_transform(self, image):
-        rnd = random.random()
-        if rnd > 0.5:
-            print(f'HalfSplit: {rnd}')
-            self._crop = tio.Crop((0,0,0,0,0,180))
-            self._flip = lambda x: x
-        else:
-            print(f'HalfSplit: {rnd}')
-            self._crop = tio.Crop((0,0,0,0,180,0))
-            self._flip = tio.RandomFlip(axes = 2, flip_probability=1)
+        self._crop = tio.Crop((0,0,0,0,0,image.shape[-1]//2))
+        self._flip = lambda x: x
 
         image = self._crop(image)
         image = self._flip(image)
         return image
+
+class RightSplit(tio.Transform):
+    def __init__(self, axes=-1):
+        super().__init__()
+        self.axes = axes
+
+    def apply_transform(self, image):
+        self._crop = tio.Crop((0,0,0,0,image.shape[-1]//2,0))
+        self._flip = tio.RandomFlip(axes = 2, flip_probability=1)
+
+        image = self._crop(image)
+        image = self._flip(image)
+        return image
+
+class HalfSplit(tio.Transform):
+    def __init__(self, axes=-1):
+        super().__init__()
+        self.axes = axes
+        self.right = RightSplit()
+        self.left = LeftSplit()
+
+    def apply_transform(self, image):
+        if random.random() > 0.5:
+            return self.right(image)
+        else:
+            return self.left(image)
 
 
 # TODO: change this pls
@@ -434,6 +453,7 @@ class AugFactory:
         logging.info('Augmentations: {}'.format(self.aug_list))
 
     def factory(self, auglist, transforms):
+        if auglist == None: return []
         for aug in auglist:
             if aug == 'OneOf':
                 transforms.append(tio.OneOf(self.factory(auglist[aug], [])))

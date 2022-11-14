@@ -70,8 +70,11 @@ class PosPadUNet3D(nn.Module):
         h = self.ec6(h)
         h = self.ec7(h)
 
+        print(f'h: {h.shape}')
         emb_pos = self.pos_emb_layer(emb_codes).view(-1, 1, *self.emb_shape)
+        print(f'emb_pos: {emb_pos.shape}')
         h = torch.cat((h, emb_pos), dim=1)
+        print(f'h: {h.shape}')
         h = torch.cat((self.dc9(h), feat_2), dim=1)
 
         h = self.dc8(h)
@@ -87,3 +90,10 @@ class PosPadUNet3D(nn.Module):
         
         h = self.final(h)
         return torch.sigmoid(h)
+
+if __name__ == '__main__':
+    model = PosPadUNet3D(1, [10,10,10], 1)
+    pos = torch.rand((1,6))
+    x = torch.rand((1, 1, 80, 80, 80))
+    model(x, pos)
+

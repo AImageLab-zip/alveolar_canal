@@ -68,6 +68,7 @@ class Generation(Experiment):
             self.optimizer.zero_grad()
             img_sparse = torch.cat([images, sparse], dim=1)
             preds = self.model(img_sparse, emb_codes)  # output -> B, C, Z, H, W
+
             assert preds.ndim == gt.ndim, f"Gt and output dimensions are not the same before loss. {preds.ndim} vs {gt.ndim}"
 
             # in original code, partition_weights is hardcoded to 1
@@ -88,8 +89,8 @@ class Generation(Experiment):
                 preds = (preds > 0.5).int()
                 preds = preds.squeeze().detach()  # BS, Z, H, W
 
-            gt = gt.squeeze()  # BS, Z, H, W
             self.evaluator.compute_metrics(preds, gt)
+
 
         epoch_train_loss = sum(losses) / len(losses)
         epoch_iou, epoch_dice = self.evaluator.mean_metric(phase='Train')
@@ -99,79 +100,13 @@ class Generation(Experiment):
         }
 
         wandb.log({
-            f'Epoch': self.epoch,
+            f'Step': self.epoch,
             f'Train/Loss': epoch_train_loss,
             f'Train/Dice': epoch_dice,
             f'Train/IoU': epoch_iou
         })
 
         return epoch_train_loss, epoch_iou
-
-    def test2(self, phase):
-
-        if phase == 'Test' or phase == 'Final':
-            data_loader = self.test_loader
-        elif phase == 'Validation':
-            data_loader = self.val_loader
-        elif phase == 'Train':
-            data_loader = self.train_loader
-        else:
-            raise Exception(f'this phase is not valid {phase}')
-
-        self.model.eval()
-
-        with torch.no_grad():
-            self.evaluator.reset_eval()
-            losses = []
-            for i, d in tqdm(enumerate(data_loader), total=len(data_loader), desc=f'{phase} epoch {str(self.epoch)}'):
-                images = d['data'][tio.DATA].float().cuda()
-                sparse = d['sparse'][tio.DATA].float().cuda()
-                gt = d['dense'][tio.DATA].cuda()
-
-                emb_codes = torch.cat((
-                    d[tio.LOCATION][:,:3],
-                    d[tio.LOCATION][:,:3] + torch.as_tensor(images.shape[-3:])
-                ), dim=1).float().cuda()
-
-                img_sparse = torch.cat([images, sparse], dim=1)
-                preds = self.model(img_sparse, emb_codes)  # output -> B, C, Z, H, W
-                assert preds.ndim == gt.ndim, f"Gt and output dimensions are not the same before loss. {preds.ndim} vs {gt.ndim}"
-
-                gt_count = torch.sum(gt == 1, dim=list(range(1, gt.ndim)))
-
-                eps = 1e-10
-                partition_weights = 1
-                if self.model.__class__.__name__ != 'Competitor':
-                    # not necessary as batch_size is small, better results
-                    # without that
-                    # if torch.sum(gt_count) == 0: continue
-                    partition_weights = (eps + gt_count) / (eps + torch.max(gt_count))
-
-                loss = self.loss(preds, gt, partition_weights)
-                losses.append(loss.item())
-                if preds.shape[1] > 1:
-                    # TODO: Can be optimized? Is Softmax here useless?
-                    preds = torch.argmax(torch.nn.Softmax(dim=1)(preds), dim=1)
-                else:
-                    preds = (preds > 0.5).int()
-                    preds = preds.squeeze().detach()  # BS, Z, H, W
-
-                gt = gt.squeeze()  # BS, Z, H, W
-                self.evaluator.compute_metrics(preds, gt)
-
-            epoch_loss = sum(losses) / len(losses)
-            epoch_iou, epoch_dice = self.evaluator.mean_metric(phase=phase)
-            self.metrics[phase] = {
-                'iou': epoch_iou,
-                'dice': epoch_dice,
-            }
-            wandb.log({
-                f'Epoch': self.epoch,
-                f'{phase}/Loss': epoch_loss,
-                f'{phase}/Dice': epoch_dice,
-                f'{phase}/IoU': epoch_iou
-            })
-        return epoch_iou, epoch_dice
 
     def test(self, phase):
 
@@ -203,6 +138,7 @@ class Generation(Experiment):
                     # join sparse + data
                     x = torch.cat([images, sparse], dim=1)
                     output = self.model(x, emb_codes)  # BS, Classes, Z, H, W
+
                     aggregator.add_batch(output, patch[tio.LOCATION])
                     gt_aggregator.add_batch(gt, patch[tio.LOCATION])
 

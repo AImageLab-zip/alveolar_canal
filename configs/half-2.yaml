@@ -9,23 +9,23 @@ experiment:
 data_loader:
   dataset: /nas/softechict-nas-1/llumetti/maxillo
   training_set: null
+  augmentations: configs/augmentations-half.yaml
   preprocessing: configs/preprocessing.yaml
-  augmentations: configs/augmentations.yaml
   background_suppression: 0
-  batch_size: 2
+  batch_size: 8
   labels:
     BACKGROUND: 0
     INSIDE: 1
   mean: 0.08435
   num_workers: 8
   patch_shape:
-  - 120
-  - 120
-  - 120
+  - 168
+  - 288
+  - 192
   resize_shape:
   - 168
-  - 280
-  - 360
+  - 288
+  - 384
   sampler_type: grid
   grid_overlap: 0
   std: 0.17885
@@ -36,7 +36,7 @@ data_loader:
   - 0.999
 
 model:
-  name: PosPadUNet3D
+  name: PadUNet3D
 
 loss:
   name: Jaccard
