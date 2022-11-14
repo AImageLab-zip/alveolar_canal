@@ -37,7 +37,7 @@ class Experiment:
         self.epoch = 0
         self.metrics = {}
 
-        filename = 'splits.json'
+        filename = 'splits.json' # 'splits.json'
 
         num_classes = len(self.config.data_loader.labels)
         if 'Jaccard' in self.config.loss.name or num_classes == 2:
@@ -56,8 +56,10 @@ class Experiment:
         optim_name = self.config.optimizer.name
         train_params = self.model.parameters()
         lr = self.config.optimizer.learning_rate
+        weight_decay =  self.config.optimizer.weight_decay
+        momentum =  self.config.optimizer.momentum
 
-        self.optimizer = OptimizerFactory(optim_name, train_params, lr).get()
+        self.optimizer = OptimizerFactory(optim_name, train_params, lr, weight_decay, momentum).get()
 
         # load scheduler
         sched_name = self.config.lr_scheduler.name

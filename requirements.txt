@@ -61,3 +61,4 @@ Werkzeug==2.0.3
 wrapt==1.14.0
 xlrd==2.0.1
 zipp==3.7.0
+monai==1.0.1

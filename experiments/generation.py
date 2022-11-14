@@ -99,10 +99,11 @@ class Generation(Experiment):
         }
 
         wandb.log({
-            f'Epoch': self.epoch,
+            f'Step': self.epoch,
             f'Train/Loss': epoch_train_loss,
             f'Train/Dice': epoch_dice,
-            f'Train/IoU': epoch_iou
+            f'Train/IoU': epoch_iou,
+            # f'Train/LR': self.scheduler.param_groups[0]['lr'], non funge 
         })
 
         return epoch_train_loss, epoch_iou

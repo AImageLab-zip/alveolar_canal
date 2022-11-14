@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+# TODO: improve
 def compute_and_normalize_coords(coords, MAX_X = 168, MAX_Y= 280, MAX_Z=360):
     coord_list = []
     for coord in coords:
@@ -12,7 +13,7 @@ def compute_and_normalize_coords(coords, MAX_X = 168, MAX_Y= 280, MAX_Z=360):
         gy = gy/(MAX_Y-1)
         gz = gz/(MAX_Z-1)
         coord_list.append(torch.cat([gx.unsqueeze(0), gy.unsqueeze(0), gz.unsqueeze(0)]).unsqueeze(0))
-    return torch.cat(coord_list)
+    return torch.cat(coord_list).to(coords.device)
 
 def initialize_weights(*models):
     for model in models:
