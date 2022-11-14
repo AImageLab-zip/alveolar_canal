@@ -1,5 +1,5 @@
 title: canal_generator_train
-project_dir: '/homes/llumetti/results'
+project_dir: '/homes/vpipoli/Maxillo_VP/results'
 seed: 47
 
 experiment:
@@ -8,6 +8,7 @@ experiment:
 data_loader:
   dataset: /nas/softechict-nas-1/llumetti/maxillo
   training_set: null
+  preprocessing: configs/preprocessing.yaml
   augmentations: configs/augmentations.yaml
   background_suppression: 0
   batch_size: 2

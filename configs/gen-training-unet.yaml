@@ -1,7 +1,6 @@
 title: canal_generator_train
-project_dir: '/homes/llumetti/results'
+project_dir: '/homes/vpipoli/Maxillo_VP/results'
 seed: 47
-tensorboard_dir: /homes/llumetti/tensorboard
 
 experiment:
   name: Generation
@@ -9,6 +8,7 @@ experiment:
 data_loader:
   dataset: /nas/softechict-nas-1/llumetti/maxillo
   training_set: null
+  preprocessing: configs/preprocessing.yaml
   augmentations: configs/augmentations.yaml
   background_suppression: 0
   batch_size: 2
@@ -49,7 +49,7 @@ optimizer:
 
 trainer:
   reload: False
-  checkpoint: '/nas/softechict-nas-2/mcipriano/results/maxillo/3D/6GK1I26CS_CROP/best.pth'
+  checkpoint: ''
   do_train: True
   do_test: False
   do_inference: False
