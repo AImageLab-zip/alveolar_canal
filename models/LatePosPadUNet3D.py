@@ -1,19 +1,25 @@
 import torch
 import torch.nn as nn
 
-# TODO: improve
-def compute_and_normalize_coords(coords, MAX_X = 168, MAX_Y= 280, MAX_Z=360):
-    coord_list = []
-    for coord in coords:
-        x = torch.arange(coord[0], coord[3])
-        y = torch.arange(coord[1], coord[4])
-        z = torch.arange(coord[2], coord[5])
-        gx, gy, gz = torch.meshgrid(x,y,z, indexing="ij")
-        gx = gx/(MAX_X-1)
-        gy = gy/(MAX_Y-1)
-        gz = gz/(MAX_Z-1)
-        coord_list.append(torch.cat([gx.unsqueeze(0), gy.unsqueeze(0), gz.unsqueeze(0)]).unsqueeze(0))
-    return torch.cat(coord_list).to(coords.device)
+def compute_and_normalize_coords(coords, MAX_X=168, MAX_Y=280, MAX_Z=360):
+    max_dims = torch.tensor([MAX_X, MAX_Y, MAX_Z])-1
+    patch_size = coords[:,3:] - coords[:,:3]
+
+    # assert that all the elements are the same
+    assert torch.all(patch_size[0] == patch_size), f"patch_size not constant across batch! Got: {patch_size}"
+
+    patch_size = patch_size[0]
+    dim_x, dim_y, dim_z = patch_size
+    x = torch.arange(dim_x)
+    y = torch.arange(dim_y)
+    z = torch.arange(dim_z)
+
+    cprod = torch.cartesian_prod(x,y,z).T
+    cprod = cprod.reshape(3, dim_x, dim_y, dim_z)
+    cprod = cprod.unsqueeze(0) # dim: 1 x 3 x X x Y x Z
+    offset = coords[:, :3][:, :, None, None, None] # dim: B x 3 x 1 x 1 x 1
+    max_dims = max_dims[None,:,None,None,None] # dim: 1 x 3 x 1 x 1 x 1
+    return (cprod+offset)/max_dims
 
 def initialize_weights(*models):
     for model in models:
