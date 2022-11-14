@@ -3,6 +3,3 @@ Clamp:
   out_max: 2100
 RescaleIntensity:
   out_min_max: !!python/tuple [0, 1]
-CropOrPad:
-  target_shape: !!python/tuple [168, 288, 384]
-  padding_mode: 0

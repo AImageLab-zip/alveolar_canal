@@ -4,3 +4,6 @@ RandomAffine:
   isotropic: false
   image_interpolation: linear
   p: 0.5
+RandomFlip:
+  axes: 2
+  flip_probability: 0.5

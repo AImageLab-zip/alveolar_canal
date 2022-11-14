@@ -50,7 +50,7 @@ class Experiment:
 
         self.model = ModelFactory(model_name, num_classes, in_ch, emb_shape).get().cuda()
         self.model = nn.DataParallel(self.model)
-        wandb.watch(self.model)
+        wandb.watch(self.model, log_freq=10)
 
         # load optimizer
         optim_name = self.config.optimizer.name
