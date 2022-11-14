@@ -38,6 +38,8 @@ class Experiment:
         self.metrics = {}
 
         filename = 'splits.json'
+        if debug:
+            filename = 'splits.json'
 
         num_classes = len(self.config.data_loader.labels)
         if 'Jaccard' in self.config.loss.name or num_classes == 2:
