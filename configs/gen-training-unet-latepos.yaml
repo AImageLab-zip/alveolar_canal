@@ -35,7 +35,7 @@ data_loader:
   - 0.999
 
 model:
-  name: LatePosPadUNet3D
+  name: PosPadUNet3D
 
 loss:
   name: Jaccard
@@ -44,8 +44,10 @@ lr_scheduler:
   name: Plateau
 
 optimizer:
-  learning_rate: 0.1
+  learning_rate: 1e-2
   name: SGD
+  weight_decay: 1e-4 # 0
+  momentum: 0.9 # 0
 
 trainer:
   reload: False
