@@ -87,3 +87,10 @@ class PosPadUNet3D(nn.Module):
         
         h = self.final(h)
         return torch.sigmoid(h)
+
+if __name__ == '__main__':
+    model = PosPadUNet3D(1, [10,10,10], 1)
+    pos = torch.rand((1,6))
+    x = torch.rand((1, 1, 80, 80, 80))
+    model(x, pos)
+

@@ -10,7 +10,7 @@ slurm-*.out
 *.log
 
 # Slurm sbatch script
-run-*.sh
+*.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
