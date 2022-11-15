@@ -28,11 +28,11 @@ from eval import Eval as Evaluator
 from dataloader.AugFactory import *
 
 class Segmentation(Experiment):
-    def __init__(self, config):
+    def __init__(self, config, debug=False):
         self.train_loader = None
         self.test_loader = None
         self.val_loader = None
-        super().__init__(config)
+        super().__init__(config, debug)
 
     def train(self):
 

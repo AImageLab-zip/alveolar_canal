@@ -37,7 +37,9 @@ class Experiment:
         self.epoch = 0
         self.metrics = {}
 
-        filename = 'splits.json' # 'splits.json'
+        filename = 'splits.json'
+        if debug:
+            filename = 'splits.json'
 
         num_classes = len(self.config.data_loader.labels)
         if 'Jaccard' in self.config.loss.name or num_classes == 2:
@@ -50,7 +52,7 @@ class Experiment:
 
         self.model = ModelFactory(model_name, num_classes, in_ch, emb_shape).get().cuda()
         self.model = nn.DataParallel(self.model)
-        wandb.watch(self.model)
+        wandb.watch(self.model, log_freq=10)
 
         # load optimizer
         optim_name = self.config.optimizer.name
@@ -87,6 +89,7 @@ class Experiment:
                 filename=filename,
                 splits='train',
                 transform=tio.Compose([
+                    tio.CropOrPad(self.config.data_loader.resize_shape, padding_mode=0),
                     self.config.data_loader.preprocessing,
                     self.config.data_loader.augmentations,
                     ]),

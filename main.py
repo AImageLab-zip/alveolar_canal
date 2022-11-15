@@ -109,7 +109,7 @@ if __name__ == "__main__":
     config.title = f'{config.title}_{timehash()}'
 
     logging.info(f'Instantiation of the experiment')
-    experiment = ExperimentFactory(config).get()
+    experiment = ExperimentFactory(config, args.debug).get()
     logging.info(f'experiment title: {experiment.config.title}')
 
     project_dir_title = os.path.join(experiment.config.project_dir, experiment.config.title)

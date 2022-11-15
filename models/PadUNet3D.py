@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
+import torchio as tio
 
 
 def initialize_weights(*models):
@@ -54,7 +56,8 @@ class PadUNet3D(nn.Module):
         )
 
     def forward(self, x, emb_codes):
-        h = self.ec0(x)
+        h = F.interpolate(x, scale_factor=1/3, mode='trilinear')
+        h = self.ec0(h)
         feat_0 = self.ec1(h)
         h = self.pool0(feat_0)
         h = self.ec2(h)
@@ -82,4 +85,13 @@ class PadUNet3D(nn.Module):
         h = self.dc1(h)
         
         h = self.final(h)
+        h = F.interpolate(h, scale_factor=3, mode='trilinear')
         return torch.sigmoid(h)
+
+if __name__ == "__main__":
+    x = torch.rand((1,1,168, 288, 192))
+    net = PadUNet3D(1, ((168/3)//8,(288/3)//8,(192/3)//8), 1)
+    emb_codes = torch.rand((1,6))
+    y = net(x, emb_codes)
+    print(y.shape)
+
