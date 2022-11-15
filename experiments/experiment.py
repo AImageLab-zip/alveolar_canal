@@ -37,7 +37,7 @@ class Experiment:
         self.epoch = 0
         self.metrics = {}
 
-        filename = 'splits.json'
+        filename = 'splits.json' # 'splits.json'
         if debug:
             filename = 'splits.json'
 
