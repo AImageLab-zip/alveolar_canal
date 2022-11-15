@@ -1,6 +1,6 @@
-title: canal_generator_train
-project_dir: '/homes/llumetti/results'
-seed: 42
+title: late_pos_gen
+project_dir: '/homes/vpipoli/Maxillo_VP/results'
+seed: 47
 
 experiment:
   name: Generation
@@ -15,7 +15,8 @@ data_loader:
   labels:
     BACKGROUND: 0
     INSIDE: 1
-  num_workers: 4
+  mean: 0.08435
+  num_workers: 8
   patch_shape:
   - 120
   - 120
@@ -26,8 +27,12 @@ data_loader:
   - 360
   sampler_type: grid
   grid_overlap: 0
+  std: 0.17885
   volumes_max: 2100
   volumes_min: 0
+  weights:
+  - 0.000703
+  - 0.999
 
 model:
   name: PosPadUNet3D
@@ -39,8 +44,10 @@ lr_scheduler:
   name: Plateau
 
 optimizer:
-  learning_rate: 0.1
+  learning_rate: 0.01
   name: SGD
+  weight_decay: 0.00005 # 0
+  momentum: 0.9 # 0
 
 trainer:
   reload: False

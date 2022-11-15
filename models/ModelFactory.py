@@ -11,6 +11,7 @@ from .UNETR.UNETR import UNETR
 from .DMFNet.DMFNet import DMFNet
 from .SwinUNETR.SwinUNETR import SwinUNETR
 from .PadUNet3D import PadUNet3D
+from .LatePosPadUNet3D import LatePosPadUNet3D
 # from monai.networks.nets import SwinUNETR
 
 class ModelFactory(nn.Module):
@@ -41,5 +42,7 @@ class ModelFactory(nn.Module):
             return SwinUNETR(self.num_classes, self.emb_shape, self.in_ch)
         elif self.model_name == 'PadUNet3D':
             return PadUNet3D(self.num_classes, self.emb_shape, self.in_ch)
+        elif self.model_name == 'LatePosPadUNet3D':
+            return LatePosPadUNet3D(self.num_classes, self.emb_shape, self.in_ch)
         else:
             raise ValueError('Model name not found')
