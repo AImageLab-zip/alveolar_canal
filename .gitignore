@@ -1,6 +1,7 @@
 wandb/
 slurm-*.out
 *.pt
+.vim-arsync
 
 # General Output
 *.txt

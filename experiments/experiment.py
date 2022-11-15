@@ -34,12 +34,13 @@ from eval import Eval as Evaluator
 class Experiment:
     def __init__(self, config, debug=False):
         self.config = config
+        self.debug = debug
         self.epoch = 0
         self.metrics = {}
 
-        filename = 'splits.json'
-        if debug:
-            filename = 'splits.json'
+        filename = 'splits.json.small'
+        if self.debug:
+            filename = 'splits.json.small'
 
         num_classes = len(self.config.data_loader.labels)
         if 'Jaccard' in self.config.loss.name or num_classes == 2:

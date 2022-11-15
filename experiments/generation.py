@@ -30,10 +30,11 @@ from dataloader.Maxillo import Maxillo
 
 class Generation(Experiment):
     def __init__(self, config, debug=False):
+        self.debug = debug
         self.train_loader = None
         self.test_loader = None
         self.val_loader = None
-        super().__init__(config, debug)
+        super().__init__(config, self.debug)
 
     def train(self):
 
@@ -100,10 +101,11 @@ class Generation(Experiment):
         }
 
         wandb.log({
-            f'Step': self.epoch,
+            f'Epoch': self.epoch,
             f'Train/Loss': epoch_train_loss,
             f'Train/Dice': epoch_dice,
-            f'Train/IoU': epoch_iou
+            f'Train/IoU': epoch_iou,
+            f'Train/Lr': self.optimizer.param_groups[0]['lr']
         })
 
         return epoch_train_loss, epoch_iou

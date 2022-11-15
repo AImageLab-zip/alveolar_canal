@@ -10,6 +10,8 @@ import builtins
 import socket
 import random
 import time
+import json
+
 import numpy as np
 import torch
 import torchio as tio
@@ -17,7 +19,7 @@ import torch.distributed as dist
 import torch.utils.data as data
 
 from hashlib import shake_256
-from munch import Munch, munchify
+from munch import Munch, munchify, unmunchify
 from torch import nn
 from os import path
 from torch.backends import cudnn
@@ -73,8 +75,11 @@ if __name__ == "__main__":
         os.environ['WANDB_DISABLED'] = 'true'
 
     # start wandb
-    wandb.init(project="alveolar_canal", entity="maxillo")
-    wandb.config = config
+    wandb.init(
+        project="alveolar_canal",
+        entity="maxillo",
+        config=unmunchify(config)
+    )
 
     # Check if project_dir exists
     if not os.path.exists(config.project_dir):
