@@ -12,15 +12,19 @@ from .DMFNet.DMFNet import DMFNet
 from .SwinUNETR.SwinUNETR import SwinUNETR
 from .PadUNet3D import PadUNet3D
 from .LatePosPadUNet3D import LatePosPadUNet3D
+from .TransPosPadUNet3D import TransPosPadUNet3D
 # from monai.networks.nets import SwinUNETR
 
 class ModelFactory(nn.Module):
-    def __init__(self, model_name, num_classes, in_ch, emb_shape=None):
+    def __init__(self, model_name, num_classes, in_ch, emb_shape=None, n_layers=2, num_head=8, max_len=10_000):
         super(ModelFactory, self).__init__()
         self.model_name = model_name
         self.num_classes = num_classes
         self.in_ch = in_ch
         self.emb_shape = emb_shape
+        self.n_layers = n_layers
+        self.num_head = num_head
+        self.max_len = max_len
 
     def get(self):
         if self.model_name == 'PosPadUNet3D':
@@ -44,5 +48,7 @@ class ModelFactory(nn.Module):
             return PadUNet3D(self.num_classes, self.emb_shape, self.in_ch)
         elif self.model_name == 'LatePosPadUNet3D':
             return LatePosPadUNet3D(self.num_classes, self.emb_shape, self.in_ch)
+        elif self.model_name == 'TransPosPadUNet3D':
+            return TransPosPadUNet3D(self.num_classes, self.emb_shape, self.in_ch, n_layers=self.n_layers, num_head=self.num_head, max_len=self.max_len)
         else:
             raise ValueError('Model name not found')

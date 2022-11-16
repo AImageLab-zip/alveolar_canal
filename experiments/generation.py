@@ -105,11 +105,7 @@ class Generation(Experiment):
             f'Train/Loss': epoch_train_loss,
             f'Train/Dice': epoch_dice,
             f'Train/IoU': epoch_iou,
-<<<<<<< HEAD
             f'Train/Lr': self.optimizer.param_groups[0]['lr']
-=======
-            # f'Train/LR': self.scheduler.param_groups[0]['lr'], non funge 
->>>>>>> vittorio
         })
 
         return epoch_train_loss, epoch_iou

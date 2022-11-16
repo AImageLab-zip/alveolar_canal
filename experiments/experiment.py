@@ -38,15 +38,9 @@ class Experiment:
         self.epoch = 0
         self.metrics = {}
 
-<<<<<<< HEAD
         filename = 'splits.json.small'
         if self.debug:
             filename = 'splits.json.small'
-=======
-        filename = 'splits.json' # 'splits.json'
-        if debug:
-            filename = 'splits.json'
->>>>>>> vittorio
 
         num_classes = len(self.config.data_loader.labels)
         if 'Jaccard' in self.config.loss.name or num_classes == 2:

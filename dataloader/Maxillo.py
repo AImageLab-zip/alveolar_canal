@@ -80,9 +80,9 @@ class Maxillo(tio.SubjectsDataset):
         return subjects
 
     def get_loader(self, config, aggr=None):
-        samples_per_volume = [np.round(i / (j-config.grid_overlap)) for i, j in zip(config.resize_shape,
-config.patch_shape)]
+        samples_per_volume = [np.round(i / (j-config.grid_overlap)) for i, j in zip(config.resize_shape, config.patch_shape)]
         samples_per_volume = int(np.prod(samples_per_volume))
+        print(samples_per_volume)
         sampler = tio.GridSampler(patch_size=config.patch_shape, patch_overlap=config.grid_overlap)
         # sampler = tio.UniformSampler(patch_size=config.patch_shape)
         # print(f'sampler_per_volume: {samples_per_volume}')

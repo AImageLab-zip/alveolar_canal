@@ -4,42 +4,41 @@ from torch import dropout, nn, Tensor
 import math
 import numpy as np
 
-def get_angles(pos, i, d_model):
-  angle_rates = 1 / torch.pow(10000, (2 * (i//2)) / torch.tensor(d_model, dtype=torch.float32))
-  return pos * angle_rates  
+# def get_angles(pos, i, d_model):
+#   angle_rates = 1 / torch.pow(10000, (2 * (i//2)) / torch.tensor(d_model, dtype=torch.float32))
+#   return pos * angle_rates  
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, dropout = 0.1, max_len= 5000):
-        super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
-        pe = get_angles(torch.arange(max_len).unsqueeze(-1), torch.arange(d_model).unsqueeze(0), d_model)
-        pe[:, 0::2]  = torch.sin(pe[:, 0::2])
-        pe[:, 1::2]  = torch.cos(pe[:, 0::2])
-        self.register_buffer('pe', pe)
-        print(pe.shape)
-    def forward(self, x):
-        x = x + self.pe[:x.size(1)]
-        return self.dropout(x)     
+# class PositionalEncoding(nn.Module):
+#     def __init__(self, d_model, dropout = 0.1, max_len= 5000):
+#         super().__init__()
+#         self.dropout = nn.Dropout(p=dropout)
+#         pe = get_angles(torch.arange(max_len).unsqueeze(-1), torch.arange(d_model).unsqueeze(0), d_model)
+#         pe[:, 0::2]  = torch.sin(pe[:, 0::2])
+#         pe[:, 1::2]  = torch.cos(pe[:, 1::2])
+#         self.register_buffer('pe', pe)
+#         print(pe.shape)
+#     def forward(self, x):
+#         x = x + self.pe[:x.size(1)]
+#         return self.dropout(x)     
 
 class PositionalEncodingTorchDoc(nn.Module):
-    def __init__(self, d_model, dropout = 0.1, max_len= 5000):
+    def __init__(self, d_model, dropout=0.1, max_len=1000):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
         position = torch.arange(max_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
-        pe = torch.zeros(max_len, 1, d_model)
-        pe[:, 0, 0::2] = torch.sin(position * div_term)
-        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        pe = torch.zeros(max_len, d_model)
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
         self.register_buffer('pe', pe)
-        print(pe.shape)
     def forward(self, x):
-        x = x + self.pe[:x.size(0)]
+        x = x + self.pe[:x.size(1)]
         return self.dropout(x)  
 
       
 
 class TransformerBlock(nn.Module):
-    def __init__(self, embed_dim, num_heads, ff_dim, seq_len, rate=0.1, batch_first=True,):
+    def __init__(self, embed_dim, num_heads, ff_dim, seq_len, rate=0.1, batch_first=True):
         super(TransformerBlock, self).__init__()
         self.att = nn.MultiheadAttention(num_heads=num_heads, embed_dim=embed_dim, batch_first=batch_first)
         self.ffn = nn.Sequential(
@@ -52,14 +51,14 @@ class TransformerBlock(nn.Module):
 
     def forward(self, inputs, masked=None):
         if masked is not None:
-            attn_output, att_scores = self.att(inputs, inputs, inputs, need_weights=True, key_padding_mask=masked, average_attn_weights=False)
+            attn_output, _ = self.att(inputs, inputs, inputs, key_padding_mask=masked, average_attn_weights=False)
         else:
-            attn_output, att_scores = self.att(inputs, inputs, inputs, need_weights =True, average_attn_weights=False)
+            attn_output, _ = self.att(inputs, inputs, inputs, average_attn_weights=False)
         attn_output = self.dropout1(attn_output)
         out1 = self.layernorm1(inputs + attn_output)
         ffn_output = self.ffn(out1)
         ffn_output = self.dropout2(ffn_output)
-        return self.layernorm2(out1 + ffn_output), att_scores
+        return self.layernorm2(out1 + ffn_output)
 
 def initialize_weights(*models):
     for model in models:
@@ -73,9 +72,10 @@ def initialize_weights(*models):
                 module.bias.data.zero_()
 
 class TransPosPadUNet3D(nn.Module):
-    def __init__(self, n_classes, emb_shape, in_ch, size=32, n_layers=4, num_head=8):
+    def __init__(self, n_classes, emb_shape, in_ch, size=32, n_layers=4, num_head=8, max_len=1000):
         self.n_classes = n_classes
         self.in_ch = in_ch
+        self.size = size
         super(TransPosPadUNet3D, self).__init__()
 
         self.emb_shape = torch.as_tensor(emb_shape)
@@ -93,11 +93,13 @@ class TransPosPadUNet3D(nn.Module):
         self.pool1 = nn.MaxPool3d(2)
         self.pool2 = nn.MaxPool3d(2)
 
+        self.pos_encoder = PositionalEncodingTorchDoc(size*16, max_len=max_len)
+        self.batchnorm = nn.BatchNorm1d(size*16)
         self.encoder_layers = nn.ModuleList([TransformerBlock(embed_dim=size*16, num_heads=num_head, 
                                             ff_dim=(size*16)*2, seq_len=(self.emb_shape[0]*self.emb_shape[1]*self.emb_shape[2]), 
                                             rate=0.1, batch_first=True) for _ in range(n_layers)])
 
-        self.dc9 = nn.ConvTranspose3d(size*16+1, size*16, kernel_size=2, stride=2)
+        self.dc9 = nn.ConvTranspose3d(size*16, size*16, kernel_size=2, stride=2)
         self.dc8 = self.conv3Dblock(size*8 + size*16, size*8, kernel_size=3, stride=1, padding=1)
         self.dc7 = self.conv3Dblock(size*8, size*8, kernel_size=3, stride=1, padding=1)
         self.dc6 = nn.ConvTranspose3d(size*8, size*8, kernel_size=2, stride=2)
@@ -118,7 +120,7 @@ class TransPosPadUNet3D(nn.Module):
                 # nn.SiLU()
         )
 
-    def forward(self, x, emb_codes):
+    def forward(self, x, emb_codes): # batch, channel, D, H, W
         h = self.ec0(x)
         feat_0 = self.ec1(h)
         h = self.pool0(feat_0)
@@ -133,11 +135,16 @@ class TransPosPadUNet3D(nn.Module):
         h = self.ec6(h)
         h = self.ec7(h)
 
-        # emb_pos = self.pos_emb_layer(emb_codes).view(-1, 1, *self.emb_shape)
-        # h = torch.cat((h, emb_pos), dim=1)
-
-        for enc_layer in  self.encoder_layers:
+        h = h.reshape(h.size(0), h.size(1), h.size(2)*h.size(3)*h.size(4))  # (BS, CH, D, H, W) -> (BS, CH, D*H*W)
+        h = self.batchnorm(h)
+        h = torch.permute(h, (0,2,1))                                       # (BS, CH, D*H*W) -> (BS,  D*H*W, CH)
+        h = h * math.sqrt(self.size*16)
+        h = self.pos_encoder(h)
+        for enc_layer in self.encoder_layers:
             h = enc_layer(h)
+        h = torch.permute(h, (0,2,1))                                       # (BS,  D*H*W, CH) -> (BS, CH, D*H*W)
+        h = h.reshape(h.size(0), h.size(1), int(round(np.cbrt(h.size(2)))), 
+                        int(round(np.cbrt(h.size(2)))), int(round(np.cbrt(h.size(2)))))   # (BS, CH, D*H*W) -> (BS, CH, D, H, W)
 
         h = torch.cat((self.dc9(h), feat_2), dim=1)
 

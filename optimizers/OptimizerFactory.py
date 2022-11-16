@@ -12,7 +12,7 @@ class OptimizerFactory():
 
     def get(self):
         if self.name == 'Adam':
-            self.optimizer = Adam(params=self.params, lr=self.lr)
+            self.optimizer = Adam(params=self.params, lr=self.lr, weight_decay=self.weight_decay)
         elif self.name == 'SGD':
             self.optimizer = SGD(params=self.params, lr=self.lr, weight_decay=self.weight_decay, momentum=self.momentum)
         else:
