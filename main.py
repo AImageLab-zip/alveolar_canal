@@ -11,6 +11,7 @@ import socket
 import random
 import time
 import json
+# import pdb
 
 import numpy as np
 import torch
@@ -114,6 +115,7 @@ if __name__ == "__main__":
     config.title = f'{config.title}_{timehash()}'
 
     logging.info(f'Instantiation of the experiment')
+    # pdb.set_trace()
     experiment = ExperimentFactory(config, args.debug).get()
     logging.info(f'experiment title: {experiment.config.title}')
 

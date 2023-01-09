@@ -15,7 +15,6 @@ data_loader:
   labels:
     BACKGROUND: 0
     INSIDE: 1
-  mean: 0.08435
   num_workers: 4
   patch_shape:
   - 80
@@ -27,12 +26,8 @@ data_loader:
   - 360
   sampler_type: grid
   grid_overlap: 0
-  std: 0.17885
   volumes_max: 2100
   volumes_min: 0
-  weights:
-  - 0.000703
-  - 0.999
 
 model:
   name: PosPadUNet3D
@@ -49,8 +44,8 @@ optimizer:
 
 trainer:
   reload: False
-  checkpoint: null
+  checkpoint: ''
   do_train: True
   do_test: False
   do_inference: False
-  epochs: 28
+  epochs: 100

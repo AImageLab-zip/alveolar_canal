@@ -31,13 +31,16 @@ class Maxillo(tio.SubjectsDataset):
         affine = torch.eye(4, requires_grad=False)
         return data, affine
 
-    def _get_subjects_list(self, root, filename, splits, dist_map):
+    def _get_subjects_list(self, root, filename, splits, dist_map=None):
         dense_dir = root / 'DENSE'
         sparse_dir = root / 'SPARSE'
         splits_path = root / filename
 
         with open(splits_path) as splits_file:
             json_splits = json.load(splits_file)
+        
+        if dist_map is None:
+            dist_map = []
 
         subjects = []
         for split in splits:
@@ -83,13 +86,12 @@ class Maxillo(tio.SubjectsDataset):
         samples_per_volume = [np.round(i / (j-config.grid_overlap)) for i, j in zip(config.resize_shape,
 config.patch_shape)]
         samples_per_volume = int(np.prod(samples_per_volume))
-        sampler = tio.GridSampler(patch_size=config.patch_shape, patch_overlap=config.grid_overlap)
-        # sampler = tio.UniformSampler(patch_size=config.patch_shape)
-        # print(f'sampler_per_volume: {samples_per_volume}')
+        #sampler = tio.GridSampler(patch_size=config.patch_shape, patch_overlap=config.grid_overlap)
+        sampler = tio.UniformSampler(patch_size=config.patch_shape)
         queue = tio.Queue(
                 subjects_dataset=self,
-                max_length=samples_per_volume*2,
-                samples_per_volume=samples_per_volume,
+                max_length=100,
+                samples_per_volume=10,
                 sampler=sampler,
                 num_workers=config.num_workers,
                 shuffle_subjects=True,
@@ -97,7 +99,6 @@ config.patch_shape)]
                 start_background=False,
         )
         loader = DataLoader(queue, batch_size=config.batch_size, num_workers=0, pin_memory=True)
-        # logging.info(f'samples_per_volume: {samples_per_volume}')
         return loader
 
     def get_aggregator(self, config, aggr=None):

@@ -21,6 +21,7 @@ from torch import nn
 from os import path
 from torch.backends import cudnn
 from torch.utils.data import DistributedSampler
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataloader.Maxillo import Maxillo
@@ -31,6 +32,7 @@ from optimizers.OptimizerFactory import OptimizerFactory
 from schedulers.SchedulerFactory import SchedulerFactory
 from eval import Eval as Evaluator
 
+eps = 1e-10
 class Experiment:
     def __init__(self, config, debug=False):
         self.config = config
@@ -38,7 +40,7 @@ class Experiment:
         self.epoch = 0
         self.metrics = {}
 
-        filename = 'splits.json.small'
+        filename = 'splits.json'
         if self.debug:
             filename = 'splits.json.small'
 
@@ -92,28 +94,28 @@ class Experiment:
                     self.config.data_loader.preprocessing,
                     self.config.data_loader.augmentations,
                     ]),
-                dist_map=['sparse','dense']
+                # dist_map=['sparse','dense']
         )
         self.val_dataset = Maxillo(
                 root=self.config.data_loader.dataset,
                 filename=filename,
                 splits='val',
                 transform=self.config.data_loader.preprocessing,
-                dist_map=['sparse', 'dense']
+                # dist_map=['sparse', 'dense']
         )
         self.test_dataset = Maxillo(
                 root=self.config.data_loader.dataset,
                 filename=filename,
                 splits='test',
                 transform=self.config.data_loader.preprocessing,
-                dist_map=['sparse', 'dense']
+                # dist_map=['sparse', 'dense']
         )
         self.synthetic_dataset = Maxillo(
                 root=self.config.data_loader.dataset,
                 filename=filename,
                 splits='synthetic',
                 transform=self.config.data_loader.preprocessing,
-                dist_map=['sparse', 'dense'],
+                # dist_map=['sparse', 'dense'],
         ) 
 
         # self.test_aggregator = self.train_dataset.get_aggregator(self.config.data_loader)
@@ -160,8 +162,133 @@ class Experiment:
         if 'metrics' in state.keys():
             self.metrics = state['metrics']
 
+    def extract_data_from_patch(self, patch):
+        volume = patch['data'][tio.DATA].float().cuda()
+        gt = patch['dense'][tio.DATA].float().cuda()
+
+        if 'Generation' in self.__class__.__name__:
+            sparse = patch['sparse'][tio.DATA].float().cuda()
+            images = torch.cat([volume, sparse], dim=1)
+        else:
+            images = volume
+
+        emb_codes = torch.cat((
+            patch[tio.LOCATION][:,:3],
+            patch[tio.LOCATION][:,:3] + torch.as_tensor(images.shape[-3:])
+        ), dim=1).float().cuda()
+
+        return images, gt, emb_codes
+
     def train(self):
-        raise NotImplementedError
+
+        self.model.train()
+        self.evaluator.reset_eval()
+
+        data_loader = self.train_loader
+        if self.config.data_loader.training_set == 'generated':
+            logging.info('using the generated dataset')
+            data_loader = self.synthetic_loader
+
+        losses = []
+        for i, d in tqdm(enumerate(data_loader), total=len(data_loader), desc=f'Train epoch {str(self.epoch)}'):
+            images, gt, emb_codes = self.extract_data_from_patch(d)
+
+            partition_weights = 1
+            # TODO: Do only if not Competitor
+            gt_count = torch.sum(gt == 1, dim=list(range(1, gt.ndim)))
+            if torch.sum(gt_count) == 0: continue
+            partition_weights = (eps + gt_count) / torch.max(gt_count)
+
+            self.optimizer.zero_grad()
+            preds = self.model(images, emb_codes)
+
+            assert preds.ndim == gt.ndim, f'Gt and output dimensions are not the same before loss. {preds.ndim} vs {gt.ndim}'
+            loss = self.loss(preds, gt, partition_weights)
+            losses.append(loss.item())
+            loss.backward()
+            self.optimizer.step()
+
+            preds = (preds > 0.5).squeeze().detach()
+
+            gt = gt.squeeze()
+            self.evaluator.compute_metrics(preds, gt)
+
+        epoch_train_loss = sum(losses) / len(losses)
+        epoch_iou, epoch_dice = self.evaluator.mean_metric(phase='Train')
+
+        self.metrics['Train'] = {
+            'iou': epoch_iou,
+            'dice': epoch_dice,
+        }
+
+        wandb.log({
+            f'Epoch': self.epoch,
+            f'Train/Loss': epoch_train_loss,
+            f'Train/Dice': epoch_dice,
+            f'Train/IoU': epoch_iou,
+            f'Train/Lr': self.optimizer.param_groups[0]['lr']
+        })
+
+        return epoch_train_loss, epoch_iou
+
 
     def test(self, phase):
-        raise NotImplementedError
+
+        self.model.eval()
+
+        # with torch.no_grad():
+        with torch.inference_mode():
+            self.evaluator.reset_eval()
+            losses = []
+
+            if phase == 'Test':
+                dataset = self.test_dataset
+            elif phase == 'Validation':
+                dataset = self.val_dataset
+
+            for i, subject in tqdm(enumerate(dataset), total=len(dataset), desc=f'{phase} epoch {str(self.epoch)}'):
+
+                sampler = tio.inference.GridSampler(
+                        subject,
+                        self.config.data_loader.patch_shape,
+                        0
+                )
+                loader = DataLoader(sampler, batch_size=self.config.data_loader.batch_size)
+                aggregator = tio.inference.GridAggregator(sampler)
+                gt_aggregator = tio.inference.GridAggregator(sampler)
+
+                for j, patch in enumerate(loader):
+                    images, gt, emb_codes = self.extract_data_from_patch(patch)
+
+                    preds = self.model(images, emb_codes)
+                    aggregator.add_batch(preds, patch[tio.LOCATION])
+                    gt_aggregator.add_batch(gt, patch[tio.LOCATION])
+
+                output = aggregator.get_output_tensor()
+                gt = gt_aggregator.get_output_tensor()
+                partition_weights = 1
+
+                gt_count = torch.sum(gt == 1, dim=list(range(1, gt.ndim)))
+                if torch.sum(gt_count) != 0:
+                    partition_weights = (eps + gt_count) / (eps + torch.max(gt_count))
+
+                loss = self.loss(output.unsqueeze(0), gt.unsqueeze(0), partition_weights)
+                losses.append(loss.item())
+
+                output = output.squeeze(0)
+                output = (output > 0.5)
+
+                self.evaluator.compute_metrics(output, gt)
+
+            epoch_loss = sum(losses) / len(losses)
+            epoch_iou, epoch_dice = self.evaluator.mean_metric(phase=phase)
+
+            wandb.log({
+                f'Epoch': self.epoch,
+                f'{phase}/Loss': epoch_loss,
+                f'{phase}/Dice': epoch_dice,
+                f'{phase}/IoU': epoch_iou
+            })
+
+            return epoch_iou, epoch_dice
+                                
