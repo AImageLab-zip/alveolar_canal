@@ -34,3 +34,6 @@ class Segmentation(Experiment):
         self.test_loader = None
         self.val_loader = None
         super().__init__(config, self.debug)
+
+    def extract_data_from_patch(self, patch):
+        super().extract_data_from_patch(patch, sparse_labels=False)

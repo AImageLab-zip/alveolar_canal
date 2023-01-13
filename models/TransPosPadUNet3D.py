@@ -3,92 +3,9 @@ import torch.nn as nn
 from torch import dropout, nn, Tensor
 import math
 import numpy as np
-
-# def get_angles(pos, i, d_model):
-#   angle_rates = 1 / torch.pow(10000, (2 * (i//2)) / torch.tensor(d_model, dtype=torch.float32))
-#   return pos * angle_rates  
-
-# class PositionalEncoding(nn.Module):
-#     def __init__(self, d_model, dropout = 0.1, max_len= 5000):
-#         super().__init__()
-#         self.dropout = nn.Dropout(p=dropout)
-#         pe = get_angles(torch.arange(max_len).unsqueeze(-1), torch.arange(d_model).unsqueeze(0), d_model)
-#         pe[:, 0::2]  = torch.sin(pe[:, 0::2])
-#         pe[:, 1::2]  = torch.cos(pe[:, 1::2])
-#         self.register_buffer('pe', pe)
-#         print(pe.shape)
-#     def forward(self, x):
-#         x = x + self.pe[:x.size(1)]
-#         return self.dropout(x)     
-
-class SqueezeExcitation(torch.nn.Module):
-    def __init__(
-        self,
-        input_channels: int,
-        squeeze_channels: int,
-        activation= torch.nn.ReLU,
-        scale_activation= torch.nn.Sigmoid,
-        ) -> None:
-        super().__init__()
-        self.avgpool = torch.nn.AdaptiveAvgPool3d(1)
-        self.fc1 = torch.nn.Conv3d(input_channels, squeeze_channels, 1)
-        self.fc2 = torch.nn.Conv3d(squeeze_channels, input_channels, 1)
-        self.activation = activation()
-        self.scale_activation = scale_activation()
-    def _scale(self, input: Tensor) -> Tensor:
-        scale = self.avgpool(input)
-        scale = self.fc1(scale)
-        scale = self.activation(scale)
-        scale = self.fc2(scale)
-        return self.scale_activation(scale)
-    def forward(self, input: Tensor) -> Tensor:
-        scale = self._scale(input)
-        return scale * input
-
-
-class PositionalEncodingTorchDoc(nn.Module):
-    def __init__(self, d_model, dropout=0.1, max_len=1000):
-        super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
-        position = torch.arange(max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
-        pe = torch.zeros(max_len, d_model)
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe)
-    def forward(self, x):
-        x = x + self.pe[:x.size(1)]
-        return self.dropout(x)  
-
-class PositionalEmbedding(nn.Module):
-    def __init__(self, d_model, dropout=0.1, max_len=1000):
-        super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
-        position = torch.unsqueeze(torch.arange(max_len), 0)
-        self.register_buffer('position', position)
-        self.embedding = nn.Embedding(max_len, d_model)
-        
-    def forward(self, x):
-        # print(self.embedding.weight)
-        pos_emb = self.embedding(self.position)
-        x = x + pos_emb
-        return self.dropout(x)  
-
-# class PositionalEmbedding(nn.Module):
-#     def __init__(self, d_model, dropout=0.1, max_len=1000):
-#         super().__init__()
-#         self.dropout = nn.Dropout(p=dropout)
-#         # position = torch.unsqueeze(torch.arange(max_len), 0)
-#         self.embedding = nn.Parameter(torch.rand(max_len, d_model))
-#         # self.embedding = nn.Embedding(max_len, d_model)
-        
-#     def forward(self, x):
-#         print(self.embedding, self.embedding.shape)
-#         pos_emb = self.embedding#(self.position)
-#         x = x + pos_emb
-#         return self.dropout(x)          
-
-      
+from .layers.PositionalEncoding import PositionalEncoding
+from .layers.PositionalEmbedding import PositionalEmbedding
+from .layers.SqueezeAndExcitation import SqueezeExcitation
 
 class TransformerBlock(nn.Module):
     def __init__(self, embed_dim, num_heads, ff_dim, seq_len, rate=0.1, batch_first=True):
@@ -147,7 +64,7 @@ class TransPosPadUNet3D(nn.Module):
         self.pool2 = nn.MaxPool3d(2)
 
         if pos_enc=="sin":
-            self.pos_encoder = PositionalEncodingTorchDoc(size*16, max_len=max_len)
+            self.pos_encoder = PositionalEncoding(size*16, max_len=max_len)
         elif pos_enc=="emb":
             self.pos_encoder = PositionalEmbedding(size*16, max_len=max_len)
         else:

@@ -36,6 +36,9 @@ class Generation(Experiment):
         self.val_loader = None
         super().__init__(config, self.debug)
 
+    def extract_data_from_patch(self, patch):
+        super().extract_data_from_patch(patch, sparse_labels=True)
+
     def inference(self, output_path):
 
         self.model.eval()
@@ -48,7 +51,7 @@ class Generation(Experiment):
                     transform=self.config.data_loader.preprocessing,
                     dist_map=['sparse', 'dense']
             )
-            crop_or_pad_transform = tio.CropOrPad(self.config.data_loader.resize_shape, padding_mode=0)
+
             for i, subject in tqdm(enumerate(dataset), total=len(dataset)):
                 directory = os.path.join(output_path, f'{subject.patient}')
                 os.makedirs(directory, exist_ok=True)

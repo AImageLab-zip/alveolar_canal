@@ -151,13 +151,11 @@ if __name__ == "__main__":
         logging.error(f'Checkpoint file does not exist: {experiment.config.trainer.checkpoint}')
         raise SystemExit
 
-
     best_val = float('-inf')
     best_test = {
             'value': float('-inf'),
             'epoch': -1
             }
-
 
     # Train the model
     if config.trainer.do_train:
