@@ -14,7 +14,6 @@ from .PadUNet3D import PadUNet3D
 from .CrossPosPadUNet3D import CrossPosPadUNet3D
 from .LatePosPadUNet3D import LatePosPadUNet3D
 from .TransPosPadUNet3D import TransPosPadUNet3D
-
 # from monai.networks.nets import SwinUNETR
 
 class ModelFactory(nn.Module):
@@ -61,5 +60,8 @@ class ModelFactory(nn.Module):
         elif self.model_name == 'TransPosPadUNet3D':
             return TransPosPadUNet3D(self.num_classes, self.emb_shape, self.in_ch, 
                                         n_layers=self.n_layers, num_head=self.num_head, max_len=self.max_len, pos_enc=self.pos_enc)
+        elif self.model_name == 'MultiPosPadUNet3D':
+            from .MultiPosPadUNet3D import MultiPosPadUNet3D
+            return MultiPosPadUNet3D(self.num_classes, self.emb_shape, self.in_ch)
         else:
             raise ValueError('Model name not found')
