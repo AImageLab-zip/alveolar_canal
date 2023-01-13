@@ -10,7 +10,10 @@ class PositionalEmbedding(nn.Module):
         self.register_buffer('position', position)
         self.embedding = nn.Embedding(max_len, d_model)
 
+    def get_embedding(self,):
+        return self.embedding(self.position)
+
     def forward(self, x):
-        pos_emb = self.embedding(self.position)
+        pos_emb = self.get_embedding()
         x = x + pos_emb
         return self.dropout(x)
