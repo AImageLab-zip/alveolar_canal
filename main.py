@@ -11,7 +11,6 @@ import socket
 import random
 import time
 import json
-# import pdb
 
 import numpy as np
 import torch
@@ -79,7 +78,8 @@ if __name__ == "__main__":
     wandb.init(
         project="alveolar_canal",
         entity="maxillo",
-        config=unmunchify(config)
+        config=unmunchify(config),
+        mode=config.wandb.mode
     )
 
     # Check if project_dir exists
@@ -115,7 +115,6 @@ if __name__ == "__main__":
     config.title = f'{config.title}_{timehash()}'
 
     logging.info(f'Instantiation of the experiment')
-    # pdb.set_trace()
     experiment = ExperimentFactory(config, args.debug).get()
     logging.info(f'experiment title: {experiment.config.title}')
 
@@ -196,6 +195,10 @@ if __name__ == "__main__":
 
             if val_iou > best_val:
                 best_val = val_iou
+                wandb.run.summary["Highest_Validation_IOU/Epoch"] = experiment.epoch
+                wandb.run.summary["Highest_Validation_IOU/Valdiation_IOU"] = val_iou
+                wandb.run.summary["Highest_Validation_IOU/Valdiation_Dice"] = val_dice
+  
                 experiment.save('best.pth')
 
             experiment.epoch += 1
@@ -203,6 +206,12 @@ if __name__ == "__main__":
         logging.info(f'''
                 Best test IoU found: {best_test['value']} at epoch: {best_test['epoch']}
                 ''')
+        logging.info('Testing the model...')
+        experiment.load(name="best")
+        test_iou, test_dice = experiment.test(phase="Test")
+        logging.info(f'Test results IoU: {test_iou}\nDice: {test_dice}')
+        wandb.run.summary["Highest_Validation_IOU/Test_IOU"] = test_iou
+        wandb.run.summary["Highest_Validation_IOU/Test_Dice"] = test_dice
 
     # Test the model
     if config.trainer.do_test:
@@ -210,6 +219,8 @@ if __name__ == "__main__":
         experiment.load()
         test_iou, test_dice = experiment.test(phase="Test")
         logging.info(f'Test results IoU: {test_iou}\nDice: {test_dice}')
+        wandb.run.summary["Highest_Validation_IOU/Test_IOU"] = test_iou
+        wandb.run.summary["Highest_Validation_IOU/Test_Dice"] = test_dice
 
     # Do the inference
     if config.trainer.do_inference:

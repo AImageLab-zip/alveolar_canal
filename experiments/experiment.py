@@ -53,7 +53,7 @@ class Experiment:
         in_ch = 2 if self.config.experiment.name == 'Generation' else 1
         emb_shape = [dim // 8 for dim in self.config.data_loader.patch_shape]
 
-        self.model = ModelFactory(model_name, num_classes, in_ch, emb_shape).get().cuda()
+        self.model = ModelFactory(model_name, num_classes, in_ch, emb_shape, config=self.config).get().cuda()
         self.model = nn.DataParallel(self.model)
         wandb.watch(self.model, log_freq=10)
 
@@ -61,8 +61,10 @@ class Experiment:
         optim_name = self.config.optimizer.name
         train_params = self.model.parameters()
         lr = self.config.optimizer.learning_rate
+        weight_decay =  self.config.optimizer.weight_decay
+        momentum =  self.config.optimizer.momentum
 
-        self.optimizer = OptimizerFactory(optim_name, train_params, lr).get()
+        self.optimizer = OptimizerFactory(optim_name, train_params, lr, weight_decay, momentum).get()
 
         # load scheduler
         sched_name = self.config.lr_scheduler.name
@@ -76,7 +78,8 @@ class Experiment:
                 gamma=sched_gamma,
                 mode='max',
                 verbose=True,
-                patience=15
+                patience=15,
+                epochs=self.config.trainer.epochs
             ).get()
 
         # load loss
@@ -144,8 +147,13 @@ class Experiment:
         }
         torch.save(state, path)
 
-    def load(self):
-        path = self.config.trainer.checkpoint
+    def load(self, name=None):
+        if name is None:
+            path = self.config.trainer.checkpoint
+        else:
+            if '.pth' not in name:
+                name = name + '.pth'
+            path = os.path.join(self.config.project_dir, self.config.title, 'checkpoints', name)
         logging.info(f'Loading checkpoint from {path}')
         state = torch.load(path)
 
@@ -206,6 +214,7 @@ class Experiment:
             loss = self.loss(preds, gt, partition_weights)
             losses.append(loss.item())
             loss.backward()
+            torch.nn.utils.clip_grad_value_(self.model.parameters(), 1.)
             self.optimizer.step()
 
             preds = (preds > 0.5).squeeze().detach()
@@ -278,6 +287,13 @@ class Experiment:
                 output = output.squeeze(0)
                 output = (output > 0.5)
 
+                if phase == 'Test':
+                    wandb.log({
+                        f'{phase}/Prediction-{i}': wandb.Object3D(
+                            np.stack(np.where(output==1)).T
+                        )
+                    })
+                    
                 self.evaluator.compute_metrics(output, gt)
 
             epoch_loss = sum(losses) / len(losses)
