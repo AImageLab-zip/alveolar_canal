@@ -42,7 +42,7 @@ class Experiment:
 
         filename = 'splits.json'
         if self.debug:
-            filename = 'splits.json.small'
+            filename += '.small'
 
         num_classes = len(self.config.data_loader.labels)
         if 'Jaccard' in self.config.loss.name or num_classes == 2:
@@ -55,14 +55,14 @@ class Experiment:
 
         self.model = ModelFactory(model_name, num_classes, in_ch, emb_shape, config=self.config).get().cuda()
         self.model = nn.DataParallel(self.model)
-        wandb.watch(self.model, log_freq=10)
+        wandb.watch(self.model, log_freq=100)
 
         # load optimizer
         optim_name = self.config.optimizer.name
         train_params = self.model.parameters()
         lr = self.config.optimizer.learning_rate
-        weight_decay =  self.config.optimizer.weight_decay
-        momentum =  self.config.optimizer.momentum
+        weight_decay = self.config.optimizer.weight_decay
+        momentum = self.config.optimizer.momentum
 
         self.optimizer = OptimizerFactory(optim_name, train_params, lr, weight_decay, momentum).get()
 
@@ -170,11 +170,14 @@ class Experiment:
         if 'metrics' in state.keys():
             self.metrics = state['metrics']
 
-    def extract_data_from_patch(self, patch):
+    def extract_images_from_patch(self, patch):
+        raise Exception('Not implemented')
+
+    def extract_data_from_patch(self, patch, *, sparse_labels):
         volume = patch['data'][tio.DATA].float().cuda()
         gt = patch['dense'][tio.DATA].float().cuda()
 
-        if 'Generation' in self.__class__.__name__:
+        if sparse_labels:
             sparse = patch['sparse'][tio.DATA].float().cuda()
             images = torch.cat([volume, sparse], dim=1)
         else:
@@ -203,6 +206,8 @@ class Experiment:
 
             partition_weights = 1
             # TODO: Do only if not Competitor
+            # removed Competitor code because i don't know if we still need
+            # something that will never be executed again (maybe to compare datasets?)
             gt_count = torch.sum(gt == 1, dim=list(range(1, gt.ndim)))
             if torch.sum(gt_count) == 0: continue
             partition_weights = (eps + gt_count) / torch.max(gt_count)
