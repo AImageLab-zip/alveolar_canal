@@ -36,4 +36,4 @@ class Segmentation(Experiment):
         super().__init__(config, self.debug)
 
     def extract_data_from_patch(self, patch):
-        super().extract_data_from_patch(patch, sparse_labels=False)
+        return super().extract_data_from_patch(patch, sparse_labels=False)

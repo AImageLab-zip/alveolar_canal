@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.Tensor as Tensor
+from torch import Tensor
 
 
 class SqueezeExcitation(nn.Module):

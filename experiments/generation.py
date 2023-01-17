@@ -37,7 +37,7 @@ class Generation(Experiment):
         super().__init__(config, self.debug)
 
     def extract_data_from_patch(self, patch):
-        super().extract_data_from_patch(patch, sparse_labels=True)
+        return super().extract_data_from_patch(patch, sparse_labels=True)
 
     def inference(self, output_path):
 

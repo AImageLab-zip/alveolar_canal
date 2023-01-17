@@ -1,0 +1,56 @@
+title: multipos-encoding-unet
+project_dir: '/nas/softechict-nas-2/llumetti/results'
+seed: 42
+
+wandb:
+  mode: online
+
+experiment:
+  name: Generation
+
+data_loader:
+  dataset: /work/publicfiles/aimagelab-zip/maxillo-dataset/maxillo
+  training_set: null
+  preprocessing: configs/preprocessing.yaml
+  augmentations: configs/augmentations.yaml
+  background_suppression: 0
+  batch_size: 2
+  labels:
+    BACKGROUND: 0
+    INSIDE: 1
+  num_workers: 4
+  patch_shape:
+  - 120
+  - 120
+  - 120
+  resize_shape:
+  - 168
+  - 280
+  - 360
+  sampler_type: grid
+  grid_overlap: 0
+  volumes_max: 2100
+  volumes_min: 0
+
+model:
+  name: MultiPosPadUNet3D
+
+loss:
+  name: Jaccard
+
+lr_scheduler:
+  name: Plateau
+
+optimizer:
+  learning_rate: 0.1
+  name: SGD
+  weight_decay: 0.0
+  momentum: 0.0
+
+trainer:
+  reload: False
+  checkpoint: ''
+  do_train: True
+  do_test: False
+  do_inference: False
+  epochs: 100

@@ -46,7 +46,7 @@ class MultiPosPadUNet3D(nn.Module):
         self.pool1 = nn.MaxPool3d(2)
         self.pool2 = nn.MaxPool3d(2)
 
-        self.dc9 = nn.ConvTranspose3d(size * 16 + 1, size * 16, kernel_size=2, stride=2)
+        self.dc9 = nn.ConvTranspose3d(size * 16, size * 16, kernel_size=2, stride=2)
         self.dc8 = self.conv3Dblock(size * 8 + size * 16, size * 8, kernel_size=3, stride=1, padding=1)
         self.dc7 = self.conv3Dblock(size * 8, size * 8, kernel_size=3, stride=1, padding=1)
         self.dc6 = nn.ConvTranspose3d(size * 8, size * 8, kernel_size=2, stride=2)
@@ -72,7 +72,7 @@ class MultiPosPadUNet3D(nn.Module):
     def forward(self, x, emb_codes):
         batch_size = x.shape[0]
 
-        emb_pos_0 = self.pos_encoder_0.get_embedding()
+        emb_pos_0 = self.pos_encoder_0.get_embedding().reshape((batch_size, 32*16, 15, 15, 15))
 
         emb_pos_1e = self.pos_encoder_1e(emb_pos_0)
         emb_pos_2e = self.pos_encoder_2e(emb_pos_1e)
@@ -83,14 +83,14 @@ class MultiPosPadUNet3D(nn.Module):
         emb_pos_3d = self.pos_encoder_3d(emb_pos_2d)
 
         h = self.ec0(x)
-        feat_0 = self.ec1(h) + emb_pos_1e
+        feat_0 = self.ec1(h) + emb_pos_3e
         h = self.pool0(feat_0)
         h = self.ec2(h)
         feat_1 = self.ec3(h) + emb_pos_2e
 
         h = self.pool1(feat_1)
         h = self.ec4(h)
-        feat_2 = self.ec5(h) + emb_pos_3e
+        feat_2 = self.ec5(h) + emb_pos_1e
 
         h = self.pool2(feat_2)
         h = self.ec6(h)
@@ -119,8 +119,11 @@ class MultiPosPadUNet3D(nn.Module):
 
 
 if __name__ == '__main__':
-    model = MultiPosPadUNet3D(1, [10, 10, 10], 1)
-    pos = torch.rand((1, 6))
-    x = torch.rand((1, 1, 80, 80, 80))
-    model(x, pos)
+    with torch.inference_mode():
+        model = MultiPosPadUNet3D(1, [15, 15, 15], 1)
+        pos = torch.rand((1, 6))
+        x = torch.rand((1, 1, 120, 120, 120))
+        print(f'input.shape: {x.shape}')
+        out = model(x, pos)
+        print(f'out.shape: {out.shape}')
 

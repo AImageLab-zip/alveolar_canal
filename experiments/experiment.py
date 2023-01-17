@@ -61,7 +61,7 @@ class Experiment:
         optim_name = self.config.optimizer.name
         train_params = self.model.parameters()
         lr = self.config.optimizer.learning_rate
-        weight_decay = self.config.optimizer.weight_decay
+        weight_decay = float(self.config.optimizer.weight_decay)
         momentum = self.config.optimizer.momentum
 
         self.optimizer = OptimizerFactory(optim_name, train_params, lr, weight_decay, momentum).get()
