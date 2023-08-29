@@ -1,6 +1,6 @@
-title: TFF_TransPosPadUNet3D_EU_seed_43
-project_dir: '/mnt/beegfs/work/H2020DeciderFicarra/vpipoli/maxillo/results'
-seed: 43
+title: Inference
+project_dir: '/homes/llumetti/results'
+seed: 49
 
 wandb:
   mode: online
@@ -9,7 +9,7 @@ experiment:
   name: Generation
 
 data_loader:
-  dataset: /nas/softechict-nas-2/llumetti/toothfairy
+  dataset: /work/grana_maxillo/toothfairy
   training_set: null
   preprocessing: configs/preprocessing.yaml
   augmentations: configs/augmentations.yaml
@@ -29,7 +29,7 @@ data_loader:
   - 280
   - 360
   sampler_type: grid
-  grid_overlap: 0
+  grid_overlap: 60
   std: 0.17885
   volumes_max: 2100
   volumes_min: 0
@@ -43,7 +43,7 @@ model:
   n_head: 4
   pos_enc: emb
   mem_len: 128  
-  ABS: False
+  ABS: True
 
 
 loss:
@@ -59,9 +59,9 @@ optimizer:
   momentum: None
 
 trainer:
-  reload: False
-  checkpoint: ''
-  do_train: True
+  reload: True
+  checkpoint: '/mnt/beegfs/work/H2020DeciderFicarra/vpipoli/maxillo/results/TFF_TransPosPadUNet3D_EU_seed_49_D0EE8A062C/checkpoints/best.pth'
+  do_train: False
   do_test: False
-  do_inference: False
+  do_inference: True
   epochs: 100

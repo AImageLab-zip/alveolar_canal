@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
     # Parse arguments
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("-c", "--config", default="config.yaml", help="the config file to be used to run the experiment", required=True)
+    arg_parser.add_argument("-c", "--config", default="./configs/gen-training-unet-trans_train_1.yaml", help="the config file to be used to run the experiment")
     arg_parser.add_argument("--verbose", action='store_true', help="Log also to stdout")
     arg_parser.add_argument("--debug", action='store_true', help="debug, no wandb")
     args = arg_parser.parse_args()
@@ -77,9 +77,10 @@ if __name__ == "__main__":
     # start wandb
     wandb.init(
         project="alveolar_canal",
+        name=f"TFF_{config.model.name}_{config.seed}_M{config.model.mem_len}", # f"TFF_{config.model.name}_L{config.model.n_layers}H{config.model.n_head}_{config.seed}", # f"TFF_{config.model.name}_{config.seed}"
         entity="maxillo",
         config=unmunchify(config),
-        mode=config.wandb.mode
+        mode=config.wandb.mode,
     )
 
     # Check if project_dir exists
@@ -205,7 +206,7 @@ if __name__ == "__main__":
                 Best test IoU found: {best_test['value']} at epoch: {best_test['epoch']}
                 ''')
         logging.info('Testing the model...')
-        experiment.load(name="best")
+        experiment.load(name="best", set_epoch=True)
         test_iou, test_dice = experiment.test(phase="Test")
         logging.info(f'Test results IoU: {test_iou}\nDice: {test_dice}')
         wandb.run.summary["Highest_Validation_IOU/Test_IOU"] = test_iou
@@ -224,7 +225,7 @@ if __name__ == "__main__":
     if config.trainer.do_inference:
         logging.info('Doing inference...')
         experiment.load()
-        experiment.inference(os.path.join(config.data_loader.dataset,'SPARSE'))
+        experiment.inference(os.path.join(config.data_loader.dataset, 'Dataset'))
         # experiment.inference('/homes/llumetti/out')
 
 # TODO: add a Final test metric

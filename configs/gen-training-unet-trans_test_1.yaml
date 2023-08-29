@@ -1,6 +1,6 @@
-title: TFF_TransPosPadUNet3D_EU_seed_43
+title: TFF_MemTransPosPadUNet3D_EU_seed_42_TEST
 project_dir: '/mnt/beegfs/work/H2020DeciderFicarra/vpipoli/maxillo/results'
-seed: 43
+seed: 42
 
 wandb:
   mode: online
@@ -39,12 +39,10 @@ data_loader:
 
 model:
   name: MemTransPosPadUNet3D
-  n_layers: 4
+  n_layers: 1
   n_head: 4
   pos_enc: emb
-  mem_len: 128  
-  ABS: False
-
+  mem_len: 10
 
 loss:
   name: Jaccard
@@ -60,8 +58,8 @@ optimizer:
 
 trainer:
   reload: False
-  checkpoint: ''
-  do_train: True
-  do_test: False
+  checkpoint: '/mnt/beegfs/work/H2020DeciderFicarra/vpipoli/maxillo/results/TFF_TransPosPadUNet3D_EU_seed_42_A18092DC5A/checkpoints/best.pth'
+  do_train: False
+  do_test: True
   do_inference: False
   epochs: 100

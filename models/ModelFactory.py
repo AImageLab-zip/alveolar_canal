@@ -14,24 +14,32 @@ from .PadUNet3D import PadUNet3D
 from .CrossPosPadUNet3D import CrossPosPadUNet3D
 from .LatePosPadUNet3D import LatePosPadUNet3D
 from .TransPosPadUNet3D import TransPosPadUNet3D
+from .SqueezeTransPosPadUNet3D import SqueezeTransPosPadUNet3D
+from .MemTransPosPadUNet3D import MemTransPosPadUNet3D
 # from monai.networks.nets import SwinUNETR
 
 class ModelFactory(nn.Module):
     def __init__(self, model_name, num_classes, in_ch, 
-                        emb_shape=None, n_layers=4, num_head=1, max_len=15**3,
+                        emb_shape=None, n_layers=4, num_head=1, max_len=10**3,
                         config=None):
         super(ModelFactory, self).__init__()
         self.model_name = model_name
         self.num_classes = num_classes
         self.in_ch = in_ch
         self.emb_shape = emb_shape
+        self.max_len = max_len
+        self.config = config
         print("CONFIG: ", config)
-        if config.model.name=="TransPosPadUNet3D":
+        if config.model.name in ["TransPosPadUNet3D", "SqueezeTransPosPadUNet3D", "MemTransPosPadUNet3D"]:
             self.n_layers = config.model.n_layers
             self.num_head = config.model.n_head
             self.pos_enc = config.model.pos_enc
-        self.max_len = max_len
-        self.config = config
+        if config.model.name in ["MemTransPosPadUNet3D"]:
+            self.mem_len = config.model.mem_len
+            self.ABS = config.model.ABS
+            dim = config.data_loader.patch_shape[0]//8
+            self.max_len = dim*dim*dim
+
 
     def get(self):
         if self.model_name == 'PosPadUNet3D':
@@ -60,6 +68,12 @@ class ModelFactory(nn.Module):
         elif self.model_name == 'TransPosPadUNet3D':
             return TransPosPadUNet3D(self.num_classes, self.emb_shape, self.in_ch, 
                                         n_layers=self.n_layers, num_head=self.num_head, max_len=self.max_len, pos_enc=self.pos_enc)
+        elif self.model_name == 'SqueezeTransPosPadUNet3D':
+            return SqueezeTransPosPadUNet3D(self.num_classes, self.emb_shape, self.in_ch, 
+                                        n_layers=self.n_layers, num_head=self.num_head, max_len=self.max_len, pos_enc=self.pos_enc)     
+        elif self.model_name == 'MemTransPosPadUNet3D':
+            return MemTransPosPadUNet3D(self.num_classes, self.emb_shape, self.in_ch, 
+                                        n_layers=self.n_layers, num_head=self.num_head, max_len=self.max_len, pos_enc=self.pos_enc, mem_len=self.mem_len, ABS=self.ABS)                                            
         elif self.model_name == 'MultiPosPadUNet3D':
             from .MultiPosPadUNet3D import MultiPosPadUNet3D
             return MultiPosPadUNet3D(self.num_classes, self.emb_shape, self.in_ch)

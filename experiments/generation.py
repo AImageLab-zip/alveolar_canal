@@ -27,6 +27,7 @@ from eval import Eval as Evaluator
 from experiments.experiment import Experiment
 from dataloader.AugFactory import *
 from dataloader.Maxillo import Maxillo
+from dataloader.ToothFairy import ToothFairy
 
 class Generation(Experiment):
     def __init__(self, config, debug=False):
@@ -43,34 +44,34 @@ class Generation(Experiment):
 
         self.model.eval()
 
-        with torch.no_grad():
-            dataset = Maxillo(
-                    self.config.data_loader.dataset,
-                    'splits.json',
-                    splits=['train','val','test'],
-                    transform=self.config.data_loader.preprocessing,
-                    dist_map=['sparse', 'dense']
-            )
+        with torch.inference_mode():
+            #dataset = ToothFairy(
+            #        self.config.data_loader.dataset,
+            #        'splits.json',
+            #        splits=['synthetic'], # ['train','val','test'],
+            #        # transform=self.config.data_loader.preprocessing,
+            #        # dist_map=['sparse', 'dense']
+            #)
+            dataset = self.synthetic_dataset
 
             for i, subject in tqdm(enumerate(dataset), total=len(dataset)):
                 directory = os.path.join(output_path, f'{subject.patient}')
                 os.makedirs(directory, exist_ok=True)
                 file_path = os.path.join(directory, 'generated.npy')
 
-                if os.path.exists(file_path) and False:
-                    logging.info(f'skipping {subject.patient}...')
-                    continue
+                # if os.path.exists(file_path):
+                #    logging.info(f'skipping {subject.patient}...')
+                #    continue
 
                 sampler = tio.inference.GridSampler(
                         subject,
                         self.config.data_loader.patch_shape,
-                        patch_overlap=self.config.data_loader.grid_overlap,
+                        patch_overlap=60,
                 )
-                loader = DataLoader(sampler, batch_size=self.config.data_loader.batch_size)
-                aggregator = tio.inference.GridAggregator(sampler, overlap_mode='average')
+                loader = DataLoader(sampler, batch_size=1)
+                aggregator = tio.inference.GridAggregator(sampler, overlap_mode='hann')
 
-                logging.info(f'patient {subject.patient}...')
-                for j, patch in enumerate(loader):
+                for patch in tqdm(loader, total=len(loader), desc=f"patient {subject.patient}"):
                     images = patch['data'][tio.DATA].float().cuda()  # BS, 3, Z, H, W
                     sparse = patch['sparse'][tio.DATA].float().cuda()
                     emb_codes = patch[tio.LOCATION].float().cuda()
@@ -83,7 +84,7 @@ class Generation(Experiment):
                 output = aggregator.get_output_tensor()
                 # output = tio.CropOrPad(original_shape, padding_mode=0)(output)
                 output = output.squeeze(0)
-                # output = (output > 0.5).int()
+                output = (output > 0.5).int()
                 output = output.detach().cpu().numpy()  # BS, Z, H, W
 
                 np.save(file_path, output)

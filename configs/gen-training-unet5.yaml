@@ -1,6 +1,6 @@
-title: TFF_TransPosPadUNet3D_EU_seed_43
+title: TF_PosPadUNet3D_EU_seed_46
 project_dir: '/mnt/beegfs/work/H2020DeciderFicarra/vpipoli/maxillo/results'
-seed: 43
+seed: 46
 
 wandb:
   mode: online
@@ -18,8 +18,8 @@ data_loader:
   labels:
     BACKGROUND: 0
     INSIDE: 1
-  mean: 0.08435
-  num_workers: 4
+  mean: 0.08435    
+  num_workers: 8
   patch_shape:
   - 120
   - 120
@@ -38,25 +38,19 @@ data_loader:
   - 0.999
 
 model:
-  name: MemTransPosPadUNet3D
-  n_layers: 4
-  n_head: 4
-  pos_enc: emb
-  mem_len: 128  
-  ABS: False
-
+  name: PosPadUNet3D
 
 loss:
   name: Jaccard
 
 lr_scheduler:
-  name: OneCycleLR
+  name: Plateau
 
 optimizer:
-  learning_rate: 0.0001
-  name: Adam
-  weight_decay: 0.00005 # 0
-  momentum: None
+  learning_rate: 0.1
+  name: SGD
+  weight_decay: 0 # 0
+  momentum: 0 # 0
 
 trainer:
   reload: False

@@ -1,6 +1,6 @@
-title: TransPosPadUNet3D_seed47
-project_dir: '/homes/vpipoli/Maxillo_VP/results'
-seed: 51
+title: TFF_TransPosPadUNet3D_EU_seed_44
+project_dir: '/mnt/beegfs/work/H2020DeciderFicarra/vpipoli/maxillo/results'
+seed: 44
 
 wandb:
   mode: online
@@ -9,7 +9,7 @@ experiment:
   name: Generation
 
 data_loader:
-  dataset: /nas/softechict-nas-1/llumetti/maxillo
+  dataset: /nas/softechict-nas-2/llumetti/toothfairy
   training_set: null
   preprocessing: configs/preprocessing.yaml
   augmentations: configs/augmentations.yaml
@@ -19,7 +19,7 @@ data_loader:
     BACKGROUND: 0
     INSIDE: 1
   mean: 0.08435
-  num_workers: 8
+  num_workers: 4
   patch_shape:
   - 120
   - 120
@@ -38,10 +38,14 @@ data_loader:
   - 0.999
 
 model:
-  name: TransPosPadUNet3D
+  name: MemTransPosPadUNet3D
   n_layers: 4
   n_head: 4
   pos_enc: emb
+  mem_len: 128   
+  ABS: False
+
+
 
 loss:
   name: Jaccard

@@ -5,6 +5,7 @@ import math
 import numpy as np
 from .layers.PositionalEncoding import PositionalEncoding
 from .layers.PositionalEmbedding import PositionalEmbedding
+from .layers.SqueezeAndExcitation import SqueezeExcitation
 
 class TransformerBlock(nn.Module):
     def __init__(self, embed_dim, num_heads, ff_dim, seq_len, rate=0.1, batch_first=True):
@@ -40,15 +41,21 @@ def initialize_weights(*models):
                 module.weight.data.fill_(1)
                 module.bias.data.zero_()
 
-class TransPosPadUNet3D(nn.Module):
+class SqueezeTransPosPadUNet3D(nn.Module):
     def __init__(self, n_classes, emb_shape, in_ch, size=32, n_layers=4, num_head=8, max_len=15**3, pos_enc="sin"):
         self.n_classes = n_classes
         self.in_ch = in_ch
         self.size = size
-        super(TransPosPadUNet3D, self).__init__()
+        super(SqueezeTransPosPadUNet3D, self).__init__()
 
         self.emb_shape = torch.as_tensor(emb_shape)
         # self.pos_emb_layer = nn.Linear(6, torch.prod(self.emb_shape).item())
+        # self.se0 = SqueezeExcitation(size*2, size//4)
+        # self.se1 = SqueezeExcitation(size*4, size//2)
+        self.se2 = SqueezeExcitation(size*8, size//4)
+        # self.se3 = SqueezeExcitation(size*16, size*2)
+        # self.se4 = SqueezeExcitation(size*2, size//4)
+
         self.ec0 = self.conv3Dblock(self.in_ch, size, groups=1)
         self.ec1 = self.conv3Dblock(size, size*2, kernel_size=3, padding=1, groups=1)  # third dimension to even val
         self.ec2 = self.conv3Dblock(size*2, size*2, groups=1)
@@ -98,13 +105,17 @@ class TransPosPadUNet3D(nn.Module):
     def forward(self, x, emb_codes): # batch, channel, D, H, W
         h = self.ec0(x)
         feat_0 = self.ec1(h)
+        # feat_0 = self.se0(feat_0)
+
         h = self.pool0(feat_0)
         h = self.ec2(h)
         feat_1 = self.ec3(h)
+        # feat_1 = self.se1(feat_1)
 
         h = self.pool1(feat_1)
         h = self.ec4(h)
         feat_2 = self.ec5(h)
+        feat_2 = self.se2(feat_2)
 
         h = self.pool2(feat_2)
         h = self.ec6(h)
@@ -120,6 +131,7 @@ class TransPosPadUNet3D(nn.Module):
         h = torch.permute(h, (0,2,1))                                       # (BS,  D*H*W, CH) -> (BS, CH, D*H*W)
         h = h.reshape(h.size(0), h.size(1), int(round(np.cbrt(h.size(2)))), 
                         int(round(np.cbrt(h.size(2)))), int(round(np.cbrt(h.size(2)))))   # (BS, CH, D*H*W) -> (BS, CH, D, H, W)
+        # h = self.se3(h)
 
         h = torch.cat((self.dc9(h), feat_2), dim=1)
 
@@ -133,6 +145,7 @@ class TransPosPadUNet3D(nn.Module):
         h = torch.cat((self.dc3(h), feat_0), dim=1)
         h = self.dc2(h)
         h = self.dc1(h)
+        # h = self.se4(h)
         
         h = self.final(h)
         return torch.sigmoid(h)

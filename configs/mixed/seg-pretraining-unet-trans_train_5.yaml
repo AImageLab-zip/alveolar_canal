@@ -1,25 +1,28 @@
-title: canal_generator_train
-project_dir: '/homes/llumetti/results'
-seed: 42
+title: TFF_TransPosPadUNet3D_EU_seed_46_MIXED
+project_dir: '/work/grana_maxillo/results'
+seed: 46
+
+wandb:
+  mode: online
 
 experiment:
-  name: Generation
+  name: Segmentation
 
 data_loader:
-  dataset: /nas/softechict-nas-1/llumetti/maxillo
-  training_set: null
+  dataset: /work/grana_maxillo/toothfairy
+  training_set: mixed
   preprocessing: configs/preprocessing.yaml
   augmentations: configs/augmentations.yaml
   background_suppression: 0
-  batch_size: 2
+  batch_size: 16
   labels:
     BACKGROUND: 0
     INSIDE: 1
   num_workers: 4
   patch_shape:
-  - 120
-  - 120
-  - 120
+  - 80 
+  - 80 
+  - 80 
   resize_shape:
   - 168
   - 280
@@ -30,17 +33,25 @@ data_loader:
   volumes_min: 0
 
 model:
-  name: PosPadUNet3D
+  name: MemTransPosPadUNet3D
+  n_layers: 4
+  n_head: 4
+  pos_enc: emb
+  mem_len: 128  
+  ABS: 1
+
 
 loss:
   name: Jaccard
 
 lr_scheduler:
-  name: Plateau
+  name: OneCycleLR
 
 optimizer:
-  learning_rate: 0.1
-  name: SGD
+  learning_rate: 0.0001
+  name: Adam
+  weight_decay: 0.00005 # 0
+  momentum: None
 
 trainer:
   reload: False

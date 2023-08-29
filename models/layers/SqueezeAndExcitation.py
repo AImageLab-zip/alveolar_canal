@@ -20,14 +20,19 @@ class SqueezeExcitation(nn.Module):
         self.fc2 = torch.nn.Conv3d(squeeze_channels, input_channels, 1)
         self.activation = activation()
         self.scale_activation = scale_activation()
-
     def _scale(self, input: Tensor) -> Tensor:
-        scale = self.avgpool(input)
-        scale = self.fc1(scale)
-        scale = self.activation(scale)
-        scale = self.fc2(scale)
+        scale = self.avgpool(input)        
+        scale = self.fc1(scale)        
+        scale = self.activation(scale)        
+        scale = self.fc2(scale)        
         return self.scale_activation(scale)
-
     def forward(self, input: Tensor) -> Tensor:
         scale = self._scale(input)
         return scale * input
+
+# class Pooling(nn.Module):
+#     def __init__(self):
+#             super().__init__()
+#             self.avgpool = torch.nn.AdaptiveAvgPool3d(1)
+#     def forward(self, input):
+#             return self.avgpool(input)

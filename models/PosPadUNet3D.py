@@ -89,7 +89,11 @@ class PosPadUNet3D(nn.Module):
         return torch.sigmoid(h)
 
 if __name__ == '__main__':
+    import numpy as np
     model = PosPadUNet3D(1, [10,10,10], 1)
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    params = sum([np.prod(p.size()) for p in model_parameters])
+    print(f'params: {params}')
     pos = torch.rand((1,6))
     x = torch.rand((1, 1, 80, 80, 80))
     model(x, pos)

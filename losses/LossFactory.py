@@ -8,6 +8,7 @@ from .JaccardLoss import JaccardLoss
 from .CrossEntropyLoss import CrossEntropyLoss
 from .BCEWithLogitsLoss import BCEWithLogitsLoss
 from .BoundaryLoss import BoundaryLoss
+# from .CavityLoss import CavityLoss
 
 class LossFactory:
     def __init__(self, names, classes, weights=None):
@@ -34,6 +35,8 @@ class LossFactory:
             loss_fn = DiceLoss(self.classes)
         elif name == 'BoundaryLoss':
             loss_fn = BoundaryLoss()
+        # elif name=='CavityLoss':
+        #     loss_fn = CavityLoss()
         else:
             raise Exception(f"Loss function {name} can't be found.")
 

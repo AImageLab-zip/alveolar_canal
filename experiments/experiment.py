@@ -25,6 +25,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataloader.Maxillo import Maxillo
+from dataloader.ToothFairy import ToothFairy
 from dataloader.AugFactory import AugFactory
 from losses.LossFactory import LossFactory
 from models.ModelFactory import ModelFactory
@@ -74,6 +75,7 @@ class Experiment:
         self.scheduler = SchedulerFactory(
                 sched_name,
                 self.optimizer,
+                LR = self.config.optimizer.learning_rate,
                 milestones=sched_milestones,
                 gamma=sched_gamma,
                 mode='max',
@@ -88,7 +90,7 @@ class Experiment:
         # load evaluator
         self.evaluator = Evaluator(self.config, skip_dump=True)
 
-        self.train_dataset = Maxillo(
+        self.train_dataset = ToothFairy(
                 root=self.config.data_loader.dataset,
                 filename=filename,
                 splits='train',
@@ -99,24 +101,31 @@ class Experiment:
                     ]),
                 # dist_map=['sparse','dense']
         )
-        self.val_dataset = Maxillo(
+        self.val_dataset = ToothFairy(
                 root=self.config.data_loader.dataset,
                 filename=filename,
                 splits='val',
                 transform=self.config.data_loader.preprocessing,
                 # dist_map=['sparse', 'dense']
         )
-        self.test_dataset = Maxillo(
+        self.test_dataset = ToothFairy(
                 root=self.config.data_loader.dataset,
                 filename=filename,
                 splits='test',
                 transform=self.config.data_loader.preprocessing,
                 # dist_map=['sparse', 'dense']
         )
-        self.synthetic_dataset = Maxillo(
+        self.synthetic_dataset = ToothFairy(
                 root=self.config.data_loader.dataset,
                 filename=filename,
                 splits='synthetic',
+                transform=self.config.data_loader.preprocessing,
+                # dist_map=['sparse', 'dense'],
+        ) 
+        self.mixed_dataset = ToothFairy(
+                root=self.config.data_loader.dataset,
+                filename=filename,
+                splits=['synthetic', 'train'],
                 transform=self.config.data_loader.preprocessing,
                 # dist_map=['sparse', 'dense'],
         ) 
@@ -129,6 +138,7 @@ class Experiment:
         self.val_loader = self.val_dataset.get_loader(self.config.data_loader)
         self.test_loader = self.test_dataset.get_loader(self.config.data_loader)
         self.synthetic_loader = self.synthetic_dataset.get_loader(self.config.data_loader)
+        self.mixed_loader = self.mixed_dataset.get_loader(self.config.data_loader)
 
         if self.config.trainer.reload:
             self.load()
@@ -147,7 +157,7 @@ class Experiment:
         }
         torch.save(state, path)
 
-    def load(self, name=None):
+    def load(self, name=None, set_epoch=False):
         if name is None:
             path = self.config.trainer.checkpoint
         else:
@@ -165,7 +175,8 @@ class Experiment:
                 self.config.title = state['title']
         self.optimizer.load_state_dict(state['optimizer'])
         self.model.load_state_dict(state['state_dict'])
-        self.epoch = state['epoch'] + 1
+        if set_epoch or True:
+            self.epoch = state['epoch'] + 1
 
         if 'metrics' in state.keys():
             self.metrics = state['metrics']
@@ -199,6 +210,10 @@ class Experiment:
         if self.config.data_loader.training_set == 'generated':
             logging.info('using the generated dataset')
             data_loader = self.synthetic_loader
+        elif self.config.data_loader.training_set == 'mixed':
+            logging.info('using both the real and the generated dataset')
+            data_loader = self.mixed_loader
+
 
         losses = []
         for i, d in tqdm(enumerate(data_loader), total=len(data_loader), desc=f'Train epoch {str(self.epoch)}'):
@@ -265,11 +280,11 @@ class Experiment:
                 sampler = tio.inference.GridSampler(
                         subject,
                         self.config.data_loader.patch_shape,
-                        0
+                        self.config.data_loader.grid_overlap # 0 crop 60 hann
                 )
                 loader = DataLoader(sampler, batch_size=self.config.data_loader.batch_size)
-                aggregator = tio.inference.GridAggregator(sampler)
-                gt_aggregator = tio.inference.GridAggregator(sampler)
+                aggregator = tio.inference.GridAggregator(sampler, overlap_mode="hann")     # crop # hann
+                gt_aggregator = tio.inference.GridAggregator(sampler, overlap_mode="hann")  # crop # hann
 
                 for j, patch in enumerate(loader):
                     images, gt, emb_codes = self.extract_data_from_patch(patch)

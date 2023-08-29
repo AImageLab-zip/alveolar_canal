@@ -1,6 +1,6 @@
-title: TFF_TransPosPadUNet3D_EU_seed_43
-project_dir: '/mnt/beegfs/work/H2020DeciderFicarra/vpipoli/maxillo/results'
-seed: 43
+title: TFF_TransPosPadUNet3D_EU_seed_48
+project_dir: '/mnt/beegfs/work/H2020DeciderFicarra/vpipoli/maxillo/results' # '/mnt/beegfs/work/H2020DeciderFicarra/vpipoli/maxillo/results'
+seed: 48
 
 wandb:
   mode: online

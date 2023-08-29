@@ -1,6 +1,6 @@
-title: TFF_TransPosPadUNet3D_EU_seed_43
+title: TFF_TransPosPadUNet3D_EU_seed_42
 project_dir: '/mnt/beegfs/work/H2020DeciderFicarra/vpipoli/maxillo/results'
-seed: 43
+seed: 42
 
 wandb:
   mode: online
@@ -43,8 +43,6 @@ model:
   n_head: 4
   pos_enc: emb
   mem_len: 128  
-  ABS: False
-
 
 loss:
   name: Jaccard

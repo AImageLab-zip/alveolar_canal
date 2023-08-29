@@ -1,41 +1,36 @@
-title: TFF_TransPosPadUNet3D_EU_seed_43
-project_dir: '/mnt/beegfs/work/H2020DeciderFicarra/vpipoli/maxillo/results'
-seed: 43
+title: TFF_TransPosPadUNet3D_EU_seed_47-50_FINETUNE
+project_dir: '/homes/llumetti/results'
+seed: 50
 
 wandb:
   mode: online
 
 experiment:
-  name: Generation
+  name: Segmentation
 
 data_loader:
-  dataset: /nas/softechict-nas-2/llumetti/toothfairy
+  dataset: /work/grana_maxillo/toothfairy
   training_set: null
   preprocessing: configs/preprocessing.yaml
   augmentations: configs/augmentations.yaml
   background_suppression: 0
-  batch_size: 2
+  batch_size: 6
   labels:
     BACKGROUND: 0
     INSIDE: 1
-  mean: 0.08435
   num_workers: 4
   patch_shape:
-  - 120
-  - 120
-  - 120
+  - 80 
+  - 80 
+  - 80 
   resize_shape:
   - 168
   - 280
   - 360
   sampler_type: grid
   grid_overlap: 0
-  std: 0.17885
   volumes_max: 2100
   volumes_min: 0
-  weights:
-  - 0.000703
-  - 0.999
 
 model:
   name: MemTransPosPadUNet3D
@@ -43,7 +38,7 @@ model:
   n_head: 4
   pos_enc: emb
   mem_len: 128  
-  ABS: False
+  ABS: 1
 
 
 loss:
@@ -59,8 +54,8 @@ optimizer:
   momentum: None
 
 trainer:
-  reload: False
-  checkpoint: ''
+  reload: True
+  checkpoint: '/homes/llumetti/results/TFF_TransPosPadUNet3D_EU_seed_49_PRETRAIN_B179A4B111/checkpoints/best.pth'
   do_train: True
   do_test: False
   do_inference: False
