@@ -282,7 +282,7 @@ class Experiment:
                         self.config.data_loader.patch_shape,
                         self.config.data_loader.grid_overlap # 0 crop 60 hann
                 )
-                loader = DataLoader(sampler, batch_size=self.config.data_loader.batch_size)
+                loader = DataLoader(sampler, batch_size=2)
                 aggregator = tio.inference.GridAggregator(sampler, overlap_mode="hann")     # crop # hann
                 gt_aggregator = tio.inference.GridAggregator(sampler, overlap_mode="hann")  # crop # hann
 

@@ -54,8 +54,8 @@ optimizer:
   momentum: None
 
 trainer:
-  reload: False
-  checkpoint: ''
+  reload: True
+  checkpoint: '/work/grana_maxillo/results/TFF_TransPosPadUNet3D_EU_seed_45_MIXED_1DF3C3D92D/checkpoints/last.pth'
   do_train: True
   do_test: False
   do_inference: False

@@ -1,6 +1,6 @@
-title: TFF_TransPosPadUNet3D_EU_seed_44_MIXED
+title: TFF_TransPosPadUNet3D_EU_seed_45_MIXED
 project_dir: '/work/grana_maxillo/results'
-seed: 44
+seed: 45
 
 wandb:
   mode: online
@@ -28,7 +28,7 @@ data_loader:
   - 280
   - 360
   sampler_type: grid
-  grid_overlap: 0
+  grid_overlap: 40
   volumes_max: 2100
   volumes_min: 0
 
@@ -55,8 +55,8 @@ optimizer:
 
 trainer:
   reload: True
-  checkpoint: '/work/grana_maxillo/results/TFF_TransPosPadUNet3D_EU_seed_44_MIXED_B9A3999CAC/checkpoints/last.pth'
-  do_train: True
-  do_test: False
+  checkpoint: '/work/grana_maxillo/results/TFF_TransPosPadUNet3D_EU_seed_45_MIXED_1DF3C3D92D/checkpoints/best.pth'
+  do_train: False
+  do_test: True
   do_inference: False
   epochs: 100
