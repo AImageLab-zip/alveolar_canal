@@ -154,6 +154,16 @@ trainer:
   do_inference: False
   epochs: 100
 ```
+### preprocessing.yaml
+`preprocessing.yaml` defines which type of preprocessing to use during training.
+One simple preprocessing file has been used for every experiment.
+The file should follow this structure:
+```yaml
+Clamp:
+  out_min: 0
+  out_max: 2100
+RescaleIntensity:
+  out_min_max: !!python/tuple [0, 1]
 
 ### augmentations.yaml
 `augmentations.yaml` defines which type of augmentations use during training.
