@@ -98,6 +98,8 @@ data_loader:
   dataset: /path/to/maxillo
   # null to use training_set, generated to used the generated dataset
   training_set: null
+  # which preprocessing to use, see: preprocessing.yaml
+  preprocessing: configs/preprocessing.yaml
   # which augmentations to use, see: augmentations.yaml
   augmentations: configs/augmentations.yaml
   background_suppression: 0
