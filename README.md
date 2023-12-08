@@ -164,6 +164,7 @@ Clamp:
   out_max: 2100
 RescaleIntensity:
   out_min_max: !!python/tuple [0, 1]
+```
 
 ### augmentations.yaml
 `augmentations.yaml` defines which type of augmentations use during training.
